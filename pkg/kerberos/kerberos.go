@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/5amu/goad/utils"
+	"github.com/5amu/goad/pkg/utils"
 	kclient "github.com/ropnop/gokrb5/v8/client"
 	kconfig "github.com/ropnop/gokrb5/v8/config"
 	"github.com/ropnop/gokrb5/v8/iana/errorcode"
