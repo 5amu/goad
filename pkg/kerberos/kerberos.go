@@ -64,8 +64,10 @@ func (kc *KerberosClient) AuthenticateWithKeytab(username, keytabPath string) er
 }
 
 type TGS struct {
-	Ticket messages.Ticket
-	Hash   string
+	Ticket               messages.Ticket
+	TargetUser           string
+	ServicePrincipalName string
+	Hash                 string
 }
 
 func (c *KerberosClient) GetServiceTicket(target, spn string) (*TGS, error) {
