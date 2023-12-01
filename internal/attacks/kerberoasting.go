@@ -42,7 +42,6 @@ func Kerberoast(opts *KerberoastOpts) ([]*kerberos.TGS, error) {
 	users, err := ldapClient.Search(ldapKerberoastableFilter, []string{"sAMAccountName", "servicePrincipalName"})
 	if err != nil {
 		return nil, err
-
 	}
 
 	krb, err := kerberos.NewKerberosClient(opts.Realm, opts.DomainController)
