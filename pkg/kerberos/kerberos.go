@@ -116,10 +116,13 @@ func (c *KerberosClient) GetAsReqTgt(target string) (*AsRepTGT, error) {
 		}
 	}
 
-	var res AsRepTGT
-	if err := res.Ticket.Unmarshal(rb); err != nil {
+	var t messages.ASRep
+	if err := t.Unmarshal(rb); err != nil {
 		return nil, err
 	}
-	res.Hash = utils.ASREPToHashcat(*res.Ticket)
-	return &res, nil
+
+	return &AsRepTGT{
+		Ticket: &t,
+		Hash:   utils.ASREPToHashcat(t),
+	}, nil
 }
