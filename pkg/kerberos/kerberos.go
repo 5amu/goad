@@ -83,6 +83,7 @@ func (c *KerberosClient) GetServiceTicket(target, spn string) (*TGS, error) {
 
 type AsRepTGT struct {
 	Ticket *messages.ASRep
+	User   string
 	Hash   string
 }
 
