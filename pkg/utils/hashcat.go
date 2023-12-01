@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/ropnop/gokrb5/v8/messages"
+	"github.com/jcmturner/gokrb5/v8/messages"
 )
 
 func TGSToHashcat(tgs messages.Ticket, username string) string {

@@ -5,11 +5,11 @@ import (
 	"strings"
 
 	"github.com/5amu/goad/pkg/utils"
-	kclient "github.com/ropnop/gokrb5/v8/client"
-	kconfig "github.com/ropnop/gokrb5/v8/config"
-	"github.com/ropnop/gokrb5/v8/iana/errorcode"
-	"github.com/ropnop/gokrb5/v8/keytab"
-	"github.com/ropnop/gokrb5/v8/messages"
+	kclient "github.com/jcmturner/gokrb5/v8/client"
+	kconfig "github.com/jcmturner/gokrb5/v8/config"
+	"github.com/jcmturner/gokrb5/v8/iana/errorcode"
+	"github.com/jcmturner/gokrb5/v8/keytab"
+	"github.com/jcmturner/gokrb5/v8/messages"
 )
 
 // Client is a kerberos client
@@ -100,7 +100,7 @@ func (c *KerberosClient) GetAsReqTgt(target string) (*AsRepTGT, error) {
 		return nil, err
 	}
 
-	rb, err := c.client.SendToKDC(b, c.Realm)
+	rb, err := c.sendToKDC(b, c.Realm)
 	if err != nil {
 		e, ok := err.(messages.KRBError)
 		if !ok {
@@ -123,6 +123,7 @@ func (c *KerberosClient) GetAsReqTgt(target string) (*AsRepTGT, error) {
 
 	return &AsRepTGT{
 		Ticket: &t,
+		User:   target,
 		Hash:   utils.ASREPToHashcat(t),
 	}, nil
 }
