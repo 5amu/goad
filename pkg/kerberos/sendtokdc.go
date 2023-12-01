@@ -1,5 +1,11 @@
 package kerberos
 
+/*
+This code is adapted from the original library, more precisely here:
+https://github.com/jcmturner/gokrb5/blob/855dbc707a37a21467aef6c0245fcf3328dc39ed/v8/client/network.go
+Thank you mister @jcmturner
+*/
+
 import (
 	"encoding/binary"
 	"fmt"
