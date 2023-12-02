@@ -75,11 +75,24 @@ func (lc *LdapClient) Close() {
 func (lc *LdapClient) bind(username, password string, prefix string) error {
 	splitted := strings.Split(prefix, ".")
 	tentativeUser := fmt.Sprintf("%s\\%s", prefix, username)
-	if len(splitted) == 1 {
-		return lc.Conn.Bind(tentativeUser, password)
-	}
-	if err := lc.Conn.Bind(tentativeUser, password); err != nil {
-		return lc.bind(username, password, strings.Join(splitted[:len(splitted)-1], "."))
+	switch password {
+	case "":
+		if len(splitted) == 1 {
+			if err := lc.Conn.UnauthenticatedBind(tentativeUser); err != nil {
+				return lc.Conn.UnauthenticatedBind(username)
+			}
+			return nil
+		}
+		if err := lc.Conn.UnauthenticatedBind(tentativeUser); err != nil {
+			return lc.bind(username, password, strings.Join(splitted[:len(splitted)-1], "."))
+		}
+	default:
+		if len(splitted) == 1 {
+			return lc.Conn.Bind(tentativeUser, password)
+		}
+		if err := lc.Conn.Bind(tentativeUser, password); err != nil {
+			return lc.bind(username, password, strings.Join(splitted[:len(splitted)-1], "."))
+		}
 	}
 	return nil
 }
