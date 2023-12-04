@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/5amu/goad/internal/attacks"
+	"github.com/5amu/goad/pkg/attacks"
 	"github.com/projectdiscovery/goflags"
 )
 
