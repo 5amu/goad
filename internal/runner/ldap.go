@@ -307,7 +307,7 @@ func (o *LdapOptions) domainSID(target string) error {
 	}
 
 	if !found {
-		return fmt.Errorf("impossible to enumerate users")
+		return fmt.Errorf("impossible to get domain SID")
 	}
 	return nil
 }
