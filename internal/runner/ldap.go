@@ -13,6 +13,7 @@ import (
 
 const (
 	ldapKerberoastableFilter   = "(&(objectCategory=person)(!(userAccountControl:1.2.840.113556.1.4.803:=2))(servicePrincipalName=*))"
+	trustedForDelegationFilter = "(&(objectCategory=person)(!(userAccountControl:1.2.840.113556.1.4.803:=2))(userAccountControl:1.2.840.113556.1.4.803:=524288))"
 	passwordNotRequiredFilter  = "(&(objectCategory=person)(!(userAccountControl:1.2.840.113556.1.4.803:=2))(userAccountControl:1.2.840.113556.1.4.803:=32))"
 	passwordNeverExpiresFilter = "(&(objectCategory=person)(objectClass=user)(userAccountControl:1.2.840.113556.1.4.803:=65536)(!(userAccountControl:1.2.840.113556.1.4.803:=2)))"
 	enumerationUserFilter      = "(&(objectCategory=person)(!(userAccountControl:1.2.840.113556.1.4.803:=2)))"
@@ -130,6 +131,8 @@ func (o *LdapOptions) run() error {
 		f = o.asreproast
 	} else if o.Hash.Kerberoast != "" {
 		f = o.kerberoast
+	} else if o.Enumeration.TrustedForDelegation {
+		f = o.trustedForDelegation
 	} else if o.Enumeration.PasswordNotRequired {
 		f = o.passwordNotRequired
 	} else if o.Enumeration.UsersEnum {
@@ -229,6 +232,44 @@ func (o *LdapOptions) kerberoast(target string) error {
 		return fmt.Errorf("[%s] no kerberoastable user found on target", target)
 	}
 	return utils.WriteLines(res, o.Hash.Kerberoast)
+}
+
+func (o *LdapOptions) trustedForDelegation(target string) error {
+	basedn := fmt.Sprintf("dc=%s", strings.Join(strings.Split(o.Connection.Domain, "."), ",dc="))
+	ldapClient := &ldap.LdapClient{
+		Host:    target,
+		Realm:   o.Connection.Domain,
+		Port:    o.Connection.Port,
+		BaseDN:  basedn,
+		SkipTLS: !o.Connection.UseTLS,
+		UseSSL:  o.Connection.SSL,
+	}
+
+	for _, user := range o.Connection.usernames {
+		for _, password := range o.Connection.passwords {
+			if err := ldapClient.Authenticate(user, password); err != nil {
+				fmt.Printf("[%s\\%s:%s] %v\n", o.Connection.Domain, user, password, err)
+				continue
+			}
+
+			users, err := ldapClient.Search(trustedForDelegationFilter, []string{"sAMAccountName"})
+			if err != nil {
+				fmt.Println(err)
+				continue
+			}
+			ldapClient.Close()
+
+			if len(users.Entries) == 0 {
+				return fmt.Errorf("[%s]-[%s\\%s:%s] no user with TRUSTED_FOR_DELEGATION", target, o.Connection.Domain, user, password)
+			}
+
+			for _, entry := range users.Entries {
+				usr := entry.GetAttributeValue("sAMAccountName")
+				fmt.Printf("[%s]-[%s\\%s:%s] the user is trusted for delegation %s\\%s\n", target, o.Connection.Domain, user, password, o.Connection.Domain, usr)
+			}
+		}
+	}
+	return nil
 }
 
 func (o *LdapOptions) passwordNotRequired(target string) error {
