@@ -15,7 +15,8 @@ const (
 	ldapKerberoastableFilter   = "(&(objectCategory=person)(!(userAccountControl:1.2.840.113556.1.4.803:=2))(servicePrincipalName=*))"
 	trustedForDelegationFilter = "(&(objectCategory=person)(!(userAccountControl:1.2.840.113556.1.4.803:=2))(userAccountControl:1.2.840.113556.1.4.803:=524288))"
 	passwordNotRequiredFilter  = "(&(objectCategory=person)(!(userAccountControl:1.2.840.113556.1.4.803:=2))(userAccountControl:1.2.840.113556.1.4.803:=32))"
-	passwordNeverExpiresFilter = "(&(objectCategory=person)(objectClass=user)(userAccountControl:1.2.840.113556.1.4.803:=65536)(!(userAccountControl:1.2.840.113556.1.4.803:=2)))"
+	passwordNeverExpiresFilter = "(&(objectCategory=person)(!(userAccountControl:1.2.840.113556.1.4.803:=2))(userAccountControl:1.2.840.113556.1.4.803:=65536))"
+	adminCountFilter           = "(&(objectCategory=person)(!(userAccountControl:1.2.840.113556.1.4.803:=2))(adminCount=1))"
 	enumerationUserFilter      = "(&(objectCategory=person)(!(userAccountControl:1.2.840.113556.1.4.803:=2)))"
 	getDomainSIDFilter         = "(userAccountControl:1.2.840.113556.1.4.803:=8192)"
 )
@@ -141,6 +142,8 @@ func (o *LdapOptions) run() error {
 		f = o.passwordNeverExpires
 	} else if o.Enumeration.GetSID {
 		f = o.domainSID
+	} else if o.Enumeration.AdminCount {
+		f = o.adminCount
 	} else {
 		return fmt.Errorf("nothing to do")
 	}
@@ -321,7 +324,6 @@ func (o *LdapOptions) passwordNeverExpires(target string) error {
 		UseSSL:  o.Connection.SSL,
 	}
 
-	var found bool
 	for _, user := range o.Connection.usernames {
 		for _, password := range o.Connection.passwords {
 			if err := ldapClient.Authenticate(user, password); err != nil {
@@ -336,8 +338,8 @@ func (o *LdapOptions) passwordNeverExpires(target string) error {
 			}
 			ldapClient.Close()
 
-			if len(users.Entries) > 0 {
-				found = true
+			if len(users.Entries) == 0 {
+				return fmt.Errorf("impossible to enumerate users with a never expiring password")
 			}
 
 			for _, entry := range users.Entries {
@@ -346,9 +348,43 @@ func (o *LdapOptions) passwordNeverExpires(target string) error {
 			}
 		}
 	}
+	return nil
+}
 
-	if !found {
-		return fmt.Errorf("impossible to enumerate users with a never expiring password")
+func (o *LdapOptions) adminCount(target string) error {
+	basedn := fmt.Sprintf("dc=%s", strings.Join(strings.Split(o.Connection.Domain, "."), ",dc="))
+	ldapClient := &ldap.LdapClient{
+		Host:    target,
+		Realm:   o.Connection.Domain,
+		Port:    o.Connection.Port,
+		BaseDN:  basedn,
+		SkipTLS: !o.Connection.UseTLS,
+		UseSSL:  o.Connection.SSL,
+	}
+
+	for _, user := range o.Connection.usernames {
+		for _, password := range o.Connection.passwords {
+			if err := ldapClient.Authenticate(user, password); err != nil {
+				fmt.Printf("[%s\\%s:%s] %v\n", o.Connection.Domain, user, password, err)
+				continue
+			}
+
+			users, err := ldapClient.Search(adminCountFilter, []string{"sAMAccountName"})
+			if err != nil {
+				fmt.Println(err)
+				continue
+			}
+			ldapClient.Close()
+
+			if len(users.Entries) == 0 {
+				return fmt.Errorf("no user with (adminCount=1)")
+			}
+
+			for _, entry := range users.Entries {
+				usr := entry.GetAttributeValue("sAMAccountName")
+				fmt.Printf("[%s]-[%s\\%s\\%s] %s\\%s has (adminCount=1)\n", o.Connection.Domain, target, user, password, o.Connection.Domain, usr)
+			}
+		}
 	}
 	return nil
 }
