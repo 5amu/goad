@@ -13,6 +13,7 @@ import (
 
 const (
 	ldapKerberoastableFilter   = "(&(objectCategory=person)(!(userAccountControl:1.2.840.113556.1.4.803:=2))(servicePrincipalName=*))"
+	passwordNotRequiredFilter  = "(&(objectCategory=person)(!(userAccountControl:1.2.840.113556.1.4.803:=2))(userAccountControl:1.2.840.113556.1.4.803:=32))"
 	passwordNeverExpiresFilter = "(&(objectCategory=person)(objectClass=user)(userAccountControl:1.2.840.113556.1.4.803:=65536)(!(userAccountControl:1.2.840.113556.1.4.803:=2)))"
 	enumerationUserFilter      = "(&(objectCategory=person)(!(userAccountControl:1.2.840.113556.1.4.803:=2)))"
 	getDomainSIDFilter         = "(userAccountControl:1.2.840.113556.1.4.803:=8192)"
@@ -41,7 +42,7 @@ type LdapHashOptions struct {
 type LdapEnumerationOptions struct {
 	TrustedForDelegation bool `long:"trusted-for-delegation" description:"Get the list of users and computers with flag TRUSTED_FOR_DELEGATION"`
 	PasswordNotRequired  bool `long:"password-not-required" description:"Get the list of users with flag PASSWD_NOTREQD"`
-	PasswordNeverExpires bool `long:"password-never-expires" description:"Get the list of accounts having a never expiring password"`
+	PasswordNeverExpires bool `long:"password-never-expires" description:"Get the list of accounts with flag DONT_EXPIRE_PASSWD"`
 	AdminCount           bool `long:"admin-count" description:"Get objets that had the value adminCount=1"`
 	UsersEnum            bool `long:"users" description:"Enumerate enabled domain users"`
 	GroupsEnum           bool `long:"groups" description:"Enumerate domain groups"`
@@ -129,6 +130,8 @@ func (o *LdapOptions) run() error {
 		f = o.asreproast
 	} else if o.Hash.Kerberoast != "" {
 		f = o.kerberoast
+	} else if o.Enumeration.PasswordNotRequired {
+		f = o.passwordNotRequired
 	} else if o.Enumeration.UsersEnum {
 		f = o.userenum
 	} else if o.Enumeration.PasswordNeverExpires {
@@ -226,6 +229,44 @@ func (o *LdapOptions) kerberoast(target string) error {
 		return fmt.Errorf("[%s] no kerberoastable user found on target", target)
 	}
 	return utils.WriteLines(res, o.Hash.Kerberoast)
+}
+
+func (o *LdapOptions) passwordNotRequired(target string) error {
+	basedn := fmt.Sprintf("dc=%s", strings.Join(strings.Split(o.Connection.Domain, "."), ",dc="))
+	ldapClient := &ldap.LdapClient{
+		Host:    target,
+		Realm:   o.Connection.Domain,
+		Port:    o.Connection.Port,
+		BaseDN:  basedn,
+		SkipTLS: !o.Connection.UseTLS,
+		UseSSL:  o.Connection.SSL,
+	}
+
+	for _, user := range o.Connection.usernames {
+		for _, password := range o.Connection.passwords {
+			if err := ldapClient.Authenticate(user, password); err != nil {
+				fmt.Printf("[%s\\%s:%s] %v\n", o.Connection.Domain, user, password, err)
+				continue
+			}
+
+			users, err := ldapClient.Search(passwordNotRequiredFilter, []string{"sAMAccountName"})
+			if err != nil {
+				fmt.Println(err)
+				continue
+			}
+			ldapClient.Close()
+
+			if len(users.Entries) == 0 {
+				return fmt.Errorf("no user with PASSWD_NOTREQD")
+			}
+
+			for _, entry := range users.Entries {
+				usr := entry.GetAttributeValue("sAMAccountName")
+				fmt.Printf("[%s]-[%s\\%s:%s] password not required for %s\\%s\n", target, o.Connection.Domain, user, password, o.Connection.Domain, usr)
+			}
+		}
+	}
+	return nil
 }
 
 func (o *LdapOptions) passwordNeverExpires(target string) error {
