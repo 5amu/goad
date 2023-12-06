@@ -13,6 +13,7 @@ import (
 
 const (
 	ldapKerberoastableFilter = "(&(objectCategory=person)(!(userAccountControl:1.2.840.113556.1.4.803:=2))(servicePrincipalName=*))"
+	enumerationUserFilter    = "(&(objectCategory=person)(!(userAccountControl:1.2.840.113556.1.4.803:=2)))"
 )
 
 type LdapConnectionOptions struct {
@@ -126,6 +127,8 @@ func (o *LdapOptions) run() error {
 		f = o.asreproast
 	} else if o.Hash.Kerberoast != "" {
 		f = o.kerberoast
+	} else if o.Enumeration.UsersEnum {
+		f = o.userenum
 	} else {
 		return fmt.Errorf("nothing to do")
 	}
@@ -217,4 +220,47 @@ func (o *LdapOptions) kerberoast(target string) error {
 		return fmt.Errorf("[%s] no kerberoastable user found on target", target)
 	}
 	return utils.WriteLines(res, o.Hash.Kerberoast)
+}
+
+func (o *LdapOptions) userenum(target string) error {
+	basedn := fmt.Sprintf("dc=%s", strings.Join(strings.Split(o.Connection.Domain, "."), ",dc="))
+	ldapClient := &ldap.LdapClient{
+		Host:    target,
+		Realm:   o.Connection.Domain,
+		Port:    o.Connection.Port,
+		BaseDN:  basedn,
+		SkipTLS: !o.Connection.UseTLS,
+		UseSSL:  o.Connection.SSL,
+	}
+
+	var found bool
+	for _, user := range o.Connection.usernames {
+		for _, password := range o.Connection.passwords {
+			if err := ldapClient.Authenticate(user, password); err != nil {
+				fmt.Printf("[%s\\%s:%s] %v\n", o.Connection.Domain, user, password, err)
+				continue
+			}
+
+			users, err := ldapClient.Search(enumerationUserFilter, []string{"sAMAccountName"})
+			if err != nil {
+				fmt.Println(err)
+				continue
+			}
+			ldapClient.Close()
+
+			if len(users.Entries) > 0 {
+				found = true
+			}
+
+			for _, entry := range users.Entries {
+				usr := entry.GetAttributeValue("sAMAccountName")
+				fmt.Printf("[%s]-[%s\\%s] found user %s\\%s\n", target, user, password, o.Connection.Domain, usr)
+			}
+		}
+	}
+
+	if !found {
+		return fmt.Errorf("impossible to enumerate users")
+	}
+	return nil
 }
