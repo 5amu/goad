@@ -9,28 +9,61 @@ import (
 )
 
 type MainOptions struct {
-	LDAP bool `long:"ldap" command:"ldap" description:"own stuff using LDAP"`
-	SMB  bool `long:"smb" command:"smb" description:"own stuff using SMB"`
+	FTP   struct{}           `command:"ftp" description:"own stuff using SMB"`
+	LDAP  runner.LdapOptions `command:"ldap" description:"own stuff using LDAP"`
+	MSSQL struct{}           `command:"mssql" description:"own stuff using MSSQL"`
+	RDP   struct{}           `command:"smb" description:"own stuff using RDP"`
+	SMB   struct{}           `command:"smb" description:"own stuff using SMB"`
+	SSH   struct{}           `command:"ssh" description:"own stuff using SSH"`
+	VNC   struct{}           `command:"vnc" description:"own stuff using VNC"`
+	WINRM struct{}           `command:"winrm" description:"own stuff using WINRM"`
+	WMI   struct{}           `command:"wmi" description:"own stuff using WMI"`
 }
 
 func main() {
 	p := flags.NewNamedParser("GoAD", flags.Default)
-	var mainOpts MainOptions
-	p.AddGroup("Application Options", "", &mainOpts)
+	var opts MainOptions
+	p.AddGroup("Application Options", "", &opts)
 
-	if len(os.Args) < 2 {
-		p.WriteHelp(os.Stdout)
+	if _, err := p.Parse(); err != nil {
 		os.Exit(1)
 	}
 
-	if _, err := p.ParseArgs(os.Args[0:2]); err != nil {
-		os.Exit(1)
-	}
-
-	if mainOpts.LDAP {
-		if err := runner.ExecuteLdapSubcommand(os.Args[2:]); err != nil {
+	if p.Command.Find("ftp") == p.Active {
+		//if err := opts.SMB.Run(); err != nil {
+		//	fmt.Println(err)
+		//}
+	} else if p.Command.Find("ldap") == p.Active {
+		if err := opts.LDAP.Run(); err != nil {
 			fmt.Println(err)
-			os.Exit(1)
 		}
+	} else if p.Command.Find("mssql") == p.Active {
+		//if err := opts.SMB.Run(); err != nil {
+		//	fmt.Println(err)
+		//}
+	} else if p.Command.Find("rdp") == p.Active {
+		//if err := opts.SMB.Run(); err != nil {
+		//	fmt.Println(err)
+		//}
+	} else if p.Command.Find("smb") == p.Active {
+		//if err := opts.SMB.Run(); err != nil {
+		//	fmt.Println(err)
+		//}
+	} else if p.Command.Find("ssh") == p.Active {
+		//if err := opts.SMB.Run(); err != nil {
+		//	fmt.Println(err)
+		//}
+	} else if p.Command.Find("vnc") == p.Active {
+		//if err := opts.SMB.Run(); err != nil {
+		//	fmt.Println(err)
+		//}
+	} else if p.Command.Find("winrm") == p.Active {
+		//if err := opts.SMB.Run(); err != nil {
+		//	fmt.Println(err)
+		//}
+	} else if p.Command.Find("wmi") == p.Active {
+		//if err := opts.SMB.Run(); err != nil {
+		//	fmt.Println(err)
+		//}
 	}
 }
