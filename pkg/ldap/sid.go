@@ -1,8 +1,6 @@
-package utils
+package ldap
 
-import (
-	"fmt"
-)
+import "fmt"
 
 type SID struct {
 	RevisionLevel     int

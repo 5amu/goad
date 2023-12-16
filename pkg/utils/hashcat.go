@@ -25,5 +25,6 @@ func ASREPToHashcat(asrep messages.ASRep) string {
 		asrep.CName.PrincipalNameString(),
 		asrep.CRealm,
 		hex.EncodeToString(asrep.EncPart.Cipher[:16]),
-		hex.EncodeToString(asrep.EncPart.Cipher[16:]))
+		hex.EncodeToString(asrep.EncPart.Cipher[16:]),
+	)
 }

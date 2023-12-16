@@ -9,24 +9,20 @@ import (
 )
 
 type LdapClient struct {
-	BaseDN             string
-	Realm              string
-	Host               string
-	ServerName         string
-	Conn               *ldap.Conn
-	Port               int
-	UseSSL             bool
-	SkipTLS            bool
-	ClientCertificates []tls.Certificate
+	BaseDN     string
+	Realm      string
+	Host       string
+	ServerName string
+	Conn       *ldap.Conn
+	Port       int
+	UseSSL     bool
+	SkipTLS    bool
 }
 
 func (lc *LdapClient) connectTLS() error {
 	config := &tls.Config{
 		InsecureSkipVerify: true,
 		ServerName:         lc.ServerName,
-	}
-	if lc.ClientCertificates != nil && len(lc.ClientCertificates) > 0 {
-		config.Certificates = lc.ClientCertificates
 	}
 	l, err := ldap.DialTLS("tcp", fmt.Sprintf("%s:%d", lc.Host, lc.Port), config)
 	if err != nil {
@@ -99,42 +95,37 @@ func (lc *LdapClient) bind(username, password string, prefix string) error {
 
 // Authenticate authenticates the user against the ldap backend.
 func (lc *LdapClient) Authenticate(username, password string) error {
-	if err := lc.Connect(); err != nil {
-		return err
+	if lc.Conn == nil {
+		if err := lc.Connect(); err != nil {
+			return err
+		}
 	}
 
 	if err := lc.bind(username, password, lc.Realm); err != nil {
 		return err
 	}
 
-	// Search for the given username
-	searchRequest := ldap.NewSearchRequest(
-		lc.BaseDN,
-		ldap.ScopeWholeSubtree, ldap.NeverDerefAliases, 0, 0, false,
-		fmt.Sprintf("(sAMAccountName=%s)", username),
-		[]string{"dn"},
-		nil,
-	)
-
-	sr, err := lc.Conn.Search(searchRequest)
+	user, err := lc.FindObject(username)
 	if err != nil {
 		return err
 	}
-
-	if len(sr.Entries) < 1 {
-		return fmt.Errorf("user does not exist")
-	}
-
-	if len(sr.Entries) > 1 {
-		return fmt.Errorf("too many entries returned")
-	}
-
-	return lc.Conn.Bind(sr.Entries[0].DN, password)
+	return lc.Conn.Bind(user["dn"], password)
 }
 
-func (lc *LdapClient) Search(filter string, attributes []string) (*ldap.SearchResult, error) {
+func (lc *LdapClient) Search(filter string, attributes ...string) (*ldap.SearchResult, error) {
 	return lc.Conn.Search(ldap.NewSearchRequest(
 		lc.BaseDN, ldap.ScopeWholeSubtree, ldap.NeverDerefAliases,
 		0, 0, false, filter, attributes, nil,
 	))
+}
+
+func NewLdapClient(host string, port int, realm string, ssl bool, skiptls bool) *LdapClient {
+	return &LdapClient{
+		Host:    host,
+		Port:    port,
+		Realm:   realm,
+		BaseDN:  fmt.Sprintf("dc=%s", strings.Join(strings.Split(realm, "."), ",dc=")),
+		SkipTLS: skiptls,
+		UseSSL:  ssl,
+	}
 }
