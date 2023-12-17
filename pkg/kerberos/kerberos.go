@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/5amu/goad/pkg/utils"
 	kclient "github.com/jcmturner/gokrb5/v8/client"
 	kconfig "github.com/jcmturner/gokrb5/v8/config"
 	"github.com/jcmturner/gokrb5/v8/iana/errorcode"
@@ -77,7 +76,7 @@ func (c *KerberosClient) GetServiceTicket(target, spn string) (*TGS, error) {
 	}
 	return &TGS{
 		Ticket: ticket,
-		Hash:   utils.TGSToHashcat(ticket, target),
+		Hash:   TGSToHashcat(ticket, target),
 	}, nil
 }
 
@@ -124,6 +123,6 @@ func (c *KerberosClient) GetAsReqTgt(target string) (*AsRepTGT, error) {
 	return &AsRepTGT{
 		Ticket: &t,
 		User:   target,
-		Hash:   utils.ASREPToHashcat(t),
+		Hash:   ASREPToHashcat(t),
 	}, nil
 }

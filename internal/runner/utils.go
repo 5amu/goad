@@ -1,4 +1,4 @@
-package utils
+package runner
 
 import (
 	"bufio"
@@ -8,7 +8,7 @@ import (
 
 // readLines reads a whole file into memory
 // and returns a slice of its lines.
-func ReadLines(path string) ([]string, error) {
+func readLines(path string) ([]string, error) {
 	file, err := os.Open(path)
 	if err != nil {
 		return nil, err
@@ -24,7 +24,7 @@ func ReadLines(path string) ([]string, error) {
 }
 
 // writeLines writes the lines to the given file.
-func WriteLines(lines []string, path string) error {
+func writeLines(lines []string, path string) error {
 	file, err := os.Create(path)
 	if err != nil {
 		return err
@@ -36,4 +36,12 @@ func WriteLines(lines []string, path string) error {
 		fmt.Fprintln(w, line)
 	}
 	return w.Flush()
+}
+
+func sliceFromString(s string) (o []string) {
+	var err error
+	if o, err = readLines(s); err != nil {
+		o = []string{s}
+	}
+	return o
 }
