@@ -40,9 +40,10 @@ const (
 )
 
 const (
-	FilterIsUser  = "(objectCategory=person)"
-	FilterIsGroup = "(objectCategory=group)"
-	FilterIsAdmin = "(adminCount=1)"
+	FilterIsUser     = "(objectCategory=person)"
+	FilterIsGroup    = "(objectCategory=group)"
+	FilterIsComputer = "(objectCategory=computer)"
+	FilterIsAdmin    = "(adminCount=1)"
 )
 
 const (

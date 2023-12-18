@@ -32,8 +32,9 @@ type LdapOptions struct {
 		PasswordNotRequired  bool `long:"password-not-required" description:"Get the list of users with flag PASSWD_NOTREQD"`
 		PasswordNeverExpires bool `long:"password-never-expires" description:"Get the list of accounts with flag DONT_EXPIRE_PASSWD"`
 		AdminCount           bool `long:"admin-count" description:"Get objets that had the value adminCount=1"`
-		UsersEnum            bool `long:"users" description:"Enumerate enabled domain users"`
-		GroupsEnum           bool `long:"groups" description:"Enumerate domain groups"`
+		Users                bool `long:"users" description:"Enumerate enabled domain users"`
+		ActiveUsers          bool `long:"active-users" description:"Enumerate active enabled domain users"`
+		Groups               bool `long:"groups" description:"Enumerate domain groups"`
 		DCList               bool `long:"dc-list" description:"Enumerate Domain Controllers"`
 		GetSID               bool `long:"get-sid" description:"Get domain sid"`
 	} `group:"Enumeration Options" description:"Enumeration Options"`
@@ -79,11 +80,17 @@ func (o *LdapOptions) Run() (err error) {
 	} else if o.Enum.PasswordNotRequired {
 		o.filter = ldap.JoinFilters(ldap.FilterIsUser, ldap.NegativeFilter(ldap.FilterDisabledUser), ldap.FilterPasswordNotRequired)
 		f = o.enumeration
-	} else if o.Enum.UsersEnum {
+	} else if o.Enum.Users {
 		o.filter = ldap.FilterIsUser
 		f = o.enumeration
-	} else if o.Enum.GroupsEnum {
+	} else if o.Enum.ActiveUsers {
+		o.filter = ldap.JoinFilters(ldap.FilterIsUser, ldap.NegativeFilter(ldap.FilterDisabledUser))
+		f = o.enumeration
+	} else if o.Enum.Groups {
 		o.filter = ldap.FilterIsGroup
+		f = o.enumeration
+	} else if o.Enum.DCList {
+		o.filter = ldap.JoinFilters(ldap.FilterIsComputer, ldap.NegativeFilter(ldap.FilterDisabledUser), ldap.FilterServerTrustAccount)
 		f = o.enumeration
 	} else if o.Enum.PasswordNeverExpires {
 		o.filter = ldap.JoinFilters(ldap.FilterIsUser, ldap.NegativeFilter(ldap.FilterDisabledUser), ldap.FilterDontExpirePassword)
