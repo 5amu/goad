@@ -12,7 +12,7 @@ type MainOptions struct {
 	FTP   struct{}           `command:"ftp" description:"own stuff using SMB"`
 	LDAP  runner.LdapOptions `command:"ldap" description:"own stuff using LDAP"`
 	MSSQL struct{}           `command:"mssql" description:"own stuff using MSSQL"`
-	RDP   struct{}           `command:"smb" description:"own stuff using RDP"`
+	RDP   struct{}           `command:"rdp" description:"own stuff using RDP"`
 	SMB   struct{}           `command:"smb" description:"own stuff using SMB"`
 	SSH   struct{}           `command:"ssh" description:"own stuff using SSH"`
 	VNC   struct{}           `command:"vnc" description:"own stuff using VNC"`
