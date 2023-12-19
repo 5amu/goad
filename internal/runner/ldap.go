@@ -16,6 +16,7 @@ type LdapOptions struct {
 	Connection struct {
 		Username string `short:"u" description:"Provide username (or FILE)"`
 		Password string `short:"p" description:"Provide password (or FILE)"`
+		NTLM     string `short:"H" long:"hashes" description:"authenticate with NTLM hash"`
 		Domain   string `short:"d" long:"domain" description:"Provide domain"`
 		Port     int    `long:"port" default:"389" description:"Ldap port to contact"`
 		SSL      bool   `short:"s" long:"ssl" description:"Use ssl to interact with ldap"`
@@ -57,10 +58,17 @@ type LdapOptions struct {
 }
 
 func (o *LdapOptions) Run() (err error) {
-	o.credentials = NewCredentialsClusterBomb(
-		sliceFromString(o.Connection.Username),
-		sliceFromString(o.Connection.Password),
-	)
+	if o.Connection.NTLM != "" {
+		o.credentials = NewCredentialsNTLM(
+			sliceFromString(o.Connection.Username),
+			o.Connection.NTLM,
+		)
+	} else {
+		o.credentials = NewCredentialsClusterBomb(
+			sliceFromString(o.Connection.Username),
+			sliceFromString(o.Connection.Password),
+		)
+	}
 
 	for _, t := range o.Targets.TARGETS {
 		o.targets = append(o.targets, sliceFromString(t)...)
@@ -116,12 +124,20 @@ func (o *LdapOptions) Run() (err error) {
 	return nil
 }
 
-func (o *LdapOptions) authenticateLdap(ldapClient *ldap.LdapClient) (credential, error) {
+func (o *LdapOptions) authenticate(ldapClient *ldap.LdapClient) (credential, error) {
 	for _, creds := range o.credentials {
-		if err := ldapClient.Authenticate(creds.Username, creds.Password); err != nil {
-			fmt.Printf("[%s\\%s:%s] %v\n", o.Connection.Domain, creds.Username, creds.Password, err)
+		if creds.Hash != "" {
+			if err := ldapClient.AuthenticateNTLM(creds.Username, creds.Hash); err != nil {
+				fmt.Printf("[%s\\%s:%s] %v\n", o.Connection.Domain, creds.Username, creds.Hash, err)
+			} else {
+				return creds, nil
+			}
 		} else {
-			return creds, nil
+			if err := ldapClient.Authenticate(creds.Username, creds.Password); err != nil {
+				fmt.Printf("[%s\\%s:%s] %v\n", o.Connection.Domain, creds.Username, creds.Password, err)
+			} else {
+				return creds, nil
+			}
 		}
 	}
 	return credential{}, fmt.Errorf("no valid authentication")
@@ -162,7 +178,7 @@ func (o *LdapOptions) kerberoast(target string) error {
 		return err
 	}
 
-	creds, err := o.authenticateLdap(lclient)
+	creds, err := o.authenticate(lclient)
 	if err != nil {
 		return err
 	}
@@ -192,19 +208,19 @@ func (o *LdapOptions) enumeration(target string) error {
 	lclient := ldap.NewLdapClient(target, o.Connection.Port, o.Connection.Domain, o.Connection.SSL, !o.Connection.UseTLS)
 	defer lclient.Close()
 
-	creds, err := o.authenticateLdap(lclient)
+	creds, err := o.authenticate(lclient)
 	if err != nil {
 		return err
 	}
 	return lclient.FindObjectsWithCallback(o.filter, func(m []map[string]string) error {
 		if len(m) == 0 {
-			return fmt.Errorf("[%s]-[%s\\%s:%s] no result found",
-				target, o.Connection.Domain, creds.Username, creds.Password,
+			return fmt.Errorf("[%s]-[%s\\%s] no result found",
+				target, o.Connection.Domain, creds.String(),
 			)
 		}
 		for _, entry := range m {
-			fmt.Printf("[%s]-[%s\\%s:%s]  %s\\%s\n",
-				target, o.Connection.Domain, creds.Username, creds.Password,
+			fmt.Printf("[%s]-[%s\\%s]  %s\\%s\n",
+				target, o.Connection.Domain, creds.String(),
 				o.Connection.Domain, entry[ldap.AttributeSAMAccountName],
 			)
 		}
@@ -216,7 +232,7 @@ func (o *LdapOptions) domainSID(target string) error {
 	lclient := ldap.NewLdapClient(target, o.Connection.Port, o.Connection.Domain, o.Connection.SSL, !o.Connection.UseTLS)
 	defer lclient.Close()
 
-	creds, err := o.authenticateLdap(lclient)
+	creds, err := o.authenticate(lclient)
 	if err != nil {
 		return err
 	}

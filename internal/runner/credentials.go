@@ -5,6 +5,7 @@ import "fmt"
 type credential struct {
 	Username string
 	Password string
+	Hash     string
 }
 
 func NewCredentialsClusterBomb(users []string, passwords []string) (out []credential) {
@@ -24,4 +25,18 @@ func NewCredentialsPitchFork(users []string, passwords []string) (out []credenti
 		out = append(out, credential{Username: users[i], Password: passwords[i]})
 	}
 	return
+}
+
+func NewCredentialsNTLM(users []string, hash string) (out []credential) {
+	for _, u := range users {
+		out = append(out, credential{Username: u, Hash: hash})
+	}
+	return
+}
+
+func (c *credential) String() string {
+	if c.Hash != "" {
+		return fmt.Sprintf("%s:%s", c.Username, c.Hash)
+	}
+	return fmt.Sprintf("%s:%s", c.Username, c.Password)
 }

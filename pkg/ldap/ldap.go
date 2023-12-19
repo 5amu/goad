@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/go-ldap/ldap"
+	"github.com/go-ldap/ldap/v3"
 )
 
 type LdapClient struct {
@@ -101,6 +101,10 @@ func (lc *LdapClient) Authenticate(username, password string) error {
 		}
 	}
 
+	if err := lc.Conn.NTLMBind(lc.Realm, username, password); err == nil {
+		return err
+	}
+
 	if err := lc.bind(username, password, lc.Realm); err != nil {
 		return err
 	}
@@ -110,6 +114,15 @@ func (lc *LdapClient) Authenticate(username, password string) error {
 		return err
 	}
 	return lc.Conn.Bind(user["dn"], password)
+}
+
+func (lc *LdapClient) AuthenticateNTLM(username, hash string) error {
+	if lc.Conn == nil {
+		if err := lc.Connect(); err != nil {
+			return err
+		}
+	}
+	return lc.Conn.NTLMBindWithHash(lc.Realm, username, hash)
 }
 
 func (lc *LdapClient) Search(filter string, attributes ...string) (*ldap.SearchResult, error) {
