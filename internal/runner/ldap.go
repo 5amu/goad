@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/5amu/goad/pkg/kerberos"
-	"github.com/5amu/goad/pkg/ldap"
+	"github.com/5amu/goad/kerberos"
+	"github.com/5amu/goad/ldap"
 )
 
 type LdapOptions struct {
