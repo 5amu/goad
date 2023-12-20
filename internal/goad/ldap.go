@@ -83,28 +83,51 @@ func (o *LdapOptions) Run() (err error) {
 	} else if o.Enum.GetSID {
 		f = o.domainSID
 	} else if o.Enum.TrustedForDelegation {
-		o.filter = ldap.JoinFilters(ldap.FilterIsUser, ldap.NegativeFilter(ldap.FilterDisabledUser), ldap.FilterTrustedForDelegation)
+		o.filter = ldap.JoinFilters(
+			ldap.FilterIsUser,
+			ldap.NegativeFilter(ldap.UACFilter(ldap.ACCOUNTDISABLE)),
+			ldap.UACFilter(ldap.TRUSTED_FOR_DELEGATION),
+		)
 		f = o.enumeration
 	} else if o.Enum.PasswordNotRequired {
-		o.filter = ldap.JoinFilters(ldap.FilterIsUser, ldap.NegativeFilter(ldap.FilterDisabledUser), ldap.FilterPasswordNotRequired)
+		o.filter = ldap.JoinFilters(
+			ldap.FilterIsUser,
+			ldap.NegativeFilter(ldap.UACFilter(ldap.ACCOUNTDISABLE)),
+			ldap.UACFilter(ldap.PASSWD_NOTREQD),
+		)
 		f = o.enumeration
 	} else if o.Enum.Users {
 		o.filter = ldap.FilterIsUser
 		f = o.enumeration
 	} else if o.Enum.ActiveUsers {
-		o.filter = ldap.JoinFilters(ldap.FilterIsUser, ldap.NegativeFilter(ldap.FilterDisabledUser))
+		o.filter = ldap.JoinFilters(
+			ldap.FilterIsUser,
+			ldap.NegativeFilter(ldap.UACFilter(ldap.ACCOUNTDISABLE)),
+		)
 		f = o.enumeration
 	} else if o.Enum.Groups {
 		o.filter = ldap.FilterIsGroup
 		f = o.enumeration
 	} else if o.Enum.DCList {
-		o.filter = ldap.JoinFilters(ldap.FilterIsComputer, ldap.NegativeFilter(ldap.FilterDisabledUser), ldap.FilterServerTrustAccount)
+		o.filter = ldap.JoinFilters(
+			ldap.FilterIsComputer,
+			ldap.NegativeFilter(ldap.UACFilter(ldap.ACCOUNTDISABLE)),
+			ldap.UACFilter(ldap.SERVER_TRUST_ACCOUNT),
+		)
 		f = o.enumeration
 	} else if o.Enum.PasswordNeverExpires {
-		o.filter = ldap.JoinFilters(ldap.FilterIsUser, ldap.NegativeFilter(ldap.FilterDisabledUser), ldap.FilterDontExpirePassword)
+		o.filter = ldap.JoinFilters(
+			ldap.FilterIsUser,
+			ldap.NegativeFilter(ldap.UACFilter(ldap.ACCOUNTDISABLE)),
+			ldap.UACFilter(ldap.DONT_EXPIRE_PASSWORD),
+		)
 		f = o.enumeration
 	} else if o.Enum.AdminCount {
-		o.filter = ldap.JoinFilters(ldap.FilterIsUser, ldap.NegativeFilter(ldap.FilterDisabledUser), ldap.FilterIsAdmin)
+		o.filter = ldap.JoinFilters(
+			ldap.FilterIsUser,
+			ldap.NegativeFilter(ldap.UACFilter(ldap.ACCOUNTDISABLE)),
+			ldap.FilterIsAdmin,
+		)
 		f = o.enumeration
 	} else {
 		return fmt.Errorf("nothing to do")
@@ -168,7 +191,7 @@ func (o *LdapOptions) kerberoast(target string) error {
 	lclient := ldap.NewLdapClient(target, o.Connection.Port, o.Connection.Domain, o.Connection.SSL, !o.Connection.UseTLS)
 	ldapFilter := ldap.JoinFilters(
 		ldap.FilterIsUser,
-		ldap.NegativeFilter(ldap.FilterDisabledUser),
+		ldap.NegativeFilter(ldap.UACFilter(ldap.ACCOUNTDISABLE)),
 		ldap.NewFilter(ldap.AttributeServicePrincipalName, "*"),
 	)
 	defer lclient.Close()
