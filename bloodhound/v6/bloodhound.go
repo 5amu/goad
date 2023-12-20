@@ -10,7 +10,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/5amu/goad/pkg/ldap"
+	"github.com/5amu/goad/ldap"
 )
 
 type Collection int

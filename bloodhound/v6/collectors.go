@@ -1,6 +1,6 @@
 package bloodhound
 
-import "github.com/5amu/goad/pkg/ldap"
+import "github.com/5amu/goad/ldap"
 
 type GroupCollector struct {
 	data Groups
