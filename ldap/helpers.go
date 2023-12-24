@@ -83,11 +83,15 @@ const (
 )
 
 const (
-	AttributeSAMAccountName       = "sAMAccountName"
-	AttributeServicePrincipalName = "servicePrincipalName"
-	AttributeObjectSid            = "objectSid"
-	AttributeAdminCount           = "adminCount"
-	AttributeUAC                  = "userAccountControl:1.2.840.113556.1.4.803:"
+	SAMAccountName             = "sAMAccountName"
+	ServicePrincipalName       = "servicePrincipalName"
+	ObjectSid                  = "objectSid"
+	AdminCount                 = "adminCount"
+	UAC                        = "userAccountControl:1.2.840.113556.1.4.803:"
+	DistinguishedName          = "distinguishedName"
+	OperatingSystem            = "operatingSystem"
+	OperatingSystemServicePack = "operatingSystemServicePack"
+	OperatingSystemVersion     = "operatingSystemVersion"
 )
 
 func JoinFilters(filters ...string) string {
@@ -109,11 +113,11 @@ func NewFilter(attribute string, equalsTo string) string {
 }
 
 func UACFilter(prop UserAccountControl) string {
-	return NewFilter(AttributeUAC, strconv.Itoa(int(prop)))
+	return NewFilter(UAC, strconv.Itoa(int(prop)))
 }
 
 func (lc *LdapClient) FindObject(user string, attributes ...string) (map[string]string, error) {
-	filter := NewFilter(AttributeSAMAccountName, user)
+	filter := NewFilter(SAMAccountName, user)
 	res, err := lc.Search(filter, attributes...)
 	if err != nil {
 		return nil, err
@@ -149,7 +153,7 @@ func (lc *LdapClient) FindObjects(filter string, attributes ...string) ([]map[st
 		for _, a := range attributes {
 			app[a] = r.GetAttributeValue(a)
 		}
-		app["dn"] = r.DN
+		app[DistinguishedName] = r.DN
 		out = append(out, app)
 	}
 	return out, nil
@@ -164,7 +168,7 @@ func (lc *LdapClient) FindObjectsWithCallback(filter string, callback func([]map
 }
 
 func (lc *LdapClient) GetDomainSID() (string, error) {
-	r, err := lc.Search(UACFilter(SERVER_TRUST_ACCOUNT), AttributeObjectSid)
+	r, err := lc.Search(UACFilter(SERVER_TRUST_ACCOUNT), ObjectSid)
 	if err != nil {
 		return "", err
 	}
