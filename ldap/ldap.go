@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/go-ldap/ldap/v3"
-	"github.com/go-ldap/ldap/v3/gssapi"
 )
 
 type LdapClient struct {
@@ -124,20 +123,6 @@ func (lc *LdapClient) AuthenticateNTLM(username, hash string) error {
 		}
 	}
 	return lc.Conn.NTLMBindWithHash(lc.Realm, username, hash)
-}
-
-func (lc *LdapClient) AuthenticateKerberos(spn string) error {
-	if lc.Conn == nil {
-		if err := lc.Connect(); err != nil {
-			return err
-		}
-	}
-
-	krb5client, err := gssapi.NewSSPIClient()
-	if err != nil {
-		return err
-	}
-	return lc.Conn.GSSAPIBind(krb5client, spn, "")
 }
 
 func (lc *LdapClient) Search(filter string, attributes ...string) (*ldap.SearchResult, error) {
