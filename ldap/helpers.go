@@ -92,6 +92,9 @@ const (
 	OperatingSystem            = "operatingSystem"
 	OperatingSystemServicePack = "operatingSystemServicePack"
 	OperatingSystemVersion     = "operatingSystemVersion"
+	PasswordLastSet            = "pwdLastSet"
+	LastLogon                  = "lastLogon"
+	MemberOf                   = "memberOf"
 )
 
 func JoinFilters(filters ...string) string {
@@ -174,7 +177,7 @@ func (lc *LdapClient) GetDomainSID() (string, error) {
 	}
 
 	for _, entry := range r.Entries {
-		return DecodeSID([]byte(entry.GetAttributeValue("objectSid"))).String(), nil
+		return DecodeSID(entry.GetAttributeValue(ObjectSid)), nil
 	}
 	return "", fmt.Errorf("impossible to get domain SID")
 }
