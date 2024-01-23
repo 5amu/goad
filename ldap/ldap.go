@@ -102,7 +102,7 @@ func (lc *LdapClient) Authenticate(username, password string) error {
 	}
 
 	if err := lc.Conn.NTLMBind(lc.Realm, username, password); err == nil {
-		return err
+		return nil
 	}
 
 	if err := lc.bind(username, password, lc.Realm); err != nil {
