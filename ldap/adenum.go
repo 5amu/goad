@@ -53,3 +53,21 @@ func (c *LdapClient) FindADObjects(filter string) ([]ADObject, error) {
 	}
 	return objects, nil
 }
+
+func (c *LdapClient) FindADObjectsWithCallback(filter string, callback func(ADObject) error) error {
+	objects, err := c.FindADObjects(filter)
+	if err != nil {
+		return err
+	}
+
+	if len(objects) == 0 {
+		return fmt.Errorf("no object returned from query")
+	}
+
+	for _, obj := range objects {
+		if err := callback(obj); err != nil {
+			return err
+		}
+	}
+	return nil
+}
