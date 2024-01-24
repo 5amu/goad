@@ -235,20 +235,13 @@ func (o *LdapOptions) enumeration(target string) error {
 	if err != nil {
 		return err
 	}
-	return lclient.FindObjectsWithCallback(o.filter, func(m []map[string]string) error {
-		if len(m) == 0 {
-			return fmt.Errorf("[%s]-[%s\\%s] no result found",
-				target, o.Connection.Domain, creds.String(),
-			)
-		}
-		for _, entry := range m {
-			fmt.Printf("[%s]-[%s\\%s]  %s\\%s\n",
-				target, o.Connection.Domain, creds.String(),
-				o.Connection.Domain, entry[ldap.SAMAccountName],
-			)
-		}
-		return nil
-	}, ldap.SAMAccountName)
+	return lclient.FindADObjectsWithCallback(o.filter, func(obj ldap.ADObject) error {
+		_, err := fmt.Printf("[%s]-[%s\\%s]  %s\\%s\n",
+			target, o.Connection.Domain, creds.String(),
+			o.Connection.Domain, obj.SAMAccountName,
+		)
+		return err
+	})
 }
 
 func (o *LdapOptions) domainSID(target string) error {
