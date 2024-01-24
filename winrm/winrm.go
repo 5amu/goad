@@ -1,29 +1,44 @@
 package winrm
 
-type Transport string
+import (
+	"context"
+	"os"
 
-const (
-	PLAINTEXT Transport = "plaintext"
-	KERBEROS  Transport = "kerberos"
-	SSL       Transport = "ssl"
-	NTLM      Transport = "ntlm"
-	CREDSSP   Transport = "credssp"
+	"github.com/masterzen/winrm"
 )
 
 type WinrmClient struct {
-	Host       string
-	Trans      Transport
-	Username   string
-	Password   string
-	Realm      string
-	Service    string
-	Keytab     string
-	Timeout    int
-	KDC        string
-	Encryption bool
-	Proxy      string
+	Endpoint *winrm.Endpoint
+	Client   *winrm.Client
 }
 
-func (c *WinrmClient) OpenShell() error {
-	return nil
+func NewWinrmClient(host string, port int, ssl bool) *WinrmClient {
+	return &WinrmClient{
+		Endpoint: winrm.NewEndpoint(host, port, ssl, true, nil, nil, nil, 0),
+	}
+}
+
+func (c *WinrmClient) Authenticate(username, password string) error {
+	params := winrm.DefaultParameters
+	params.TransportDecorator = func() winrm.Transporter { return &winrm.ClientNTLM{} }
+	client, err := winrm.NewClientWithParameters(c.Endpoint, username, password, params)
+	c.Client = client
+	return err
+}
+
+func (c *WinrmClient) OpenShell(shell string) error {
+	var cmd string
+	switch shell {
+	case "cmd":
+		cmd = "cmd.exe"
+	default:
+		cmd = "powershell.exe"
+	}
+	_, err := c.Client.RunWithContextWithInput(context.TODO(), cmd, os.Stdout, os.Stderr, os.Stdin)
+	return err
+}
+
+func (c *WinrmClient) Run(cmd string) error {
+	_, err := c.Client.RunWithContext(context.TODO(), cmd, os.Stdout, os.Stderr)
+	return err
 }
