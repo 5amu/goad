@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/5amu/go-flags"
 	"github.com/5amu/goad/internal/goad"
-	"github.com/jessevdk/go-flags"
 )
 
 type MainOptions struct {
