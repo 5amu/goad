@@ -45,9 +45,11 @@ func NewKerberosClient(domain, controller string) (*KerberosClient, error) {
 }
 
 func (kc *KerberosClient) AuthenticateWithPassword(username, password string) {
-	if kc.client == nil {
-		kc.client = kclient.NewWithPassword(username, kc.Realm, password, kc.config, kclient.DisablePAFXFAST(true))
+	if kc.client != nil {
+		kc.client.Destroy()
+		kc.client = nil
 	}
+	kc.client = kclient.NewWithPassword(username, kc.Realm, password, kc.config, kclient.DisablePAFXFAST(true))
 }
 
 func (kc *KerberosClient) AuthenticateWithKeytab(username, keytabPath string) error {
@@ -86,8 +88,17 @@ type AsRepTGT struct {
 	Hash   string
 }
 
-func (c *KerberosClient) GetAsReqTgt(target string) (*AsRepTGT, error) {
-	c.AuthenticateWithPassword(target, "unimportant")
+type ErrorRequiresPreauth struct {
+	msg string
+}
+
+func (e *ErrorRequiresPreauth) Error() string {
+	return e.msg
+}
+
+func (c *KerberosClient) GetAsReqTgt(username string) (*AsRepTGT, error) {
+	c.AuthenticateWithPassword(username, "lolz")
+	defer c.client.Destroy()
 
 	req, err := messages.NewASReqForTGT(c.Realm, c.config, c.client.Credentials.CName())
 	if err != nil {
@@ -107,9 +118,11 @@ func (c *KerberosClient) GetAsReqTgt(target string) (*AsRepTGT, error) {
 		}
 		switch e.ErrorCode {
 		case errorcode.KDC_ERR_C_PRINCIPAL_UNKNOWN:
-			return nil, fmt.Errorf("user %s does not exist", target)
+			return nil, fmt.Errorf("user %s does not exist", username)
 		case errorcode.KDC_ERR_PREAUTH_REQUIRED:
-			return nil, fmt.Errorf("user %s exists, requires preauth", target)
+			return nil, &ErrorRequiresPreauth{
+				msg: fmt.Sprintf("user %s exists, requires preauth", username),
+			}
 		default:
 			return nil, err
 		}
@@ -122,7 +135,27 @@ func (c *KerberosClient) GetAsReqTgt(target string) (*AsRepTGT, error) {
 
 	return &AsRepTGT{
 		Ticket: &t,
-		User:   target,
+		User:   username,
 		Hash:   ASREPToHashcat(t),
 	}, nil
+}
+
+func (c *KerberosClient) TestLogin(username, password string) (bool, error) {
+	client := kclient.NewWithPassword(username, c.Realm, password,
+		c.config, kclient.DisablePAFXFAST(true), kclient.AssumePreAuthentication(true),
+	)
+	defer client.Destroy()
+
+	if ok, err := client.IsConfigured(); !ok {
+		return false, err
+	}
+
+	if err := client.Login(); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+func (c *KerberosClient) Close() {
+	c.client.Destroy()
 }
