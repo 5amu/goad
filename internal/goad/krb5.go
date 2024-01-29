@@ -83,6 +83,8 @@ func (o *Krb5Options) userenum(target string) error {
 			_, ok := err.(*kerberos.ErrorRequiresPreauth)
 			if ok {
 				fmt.Printf("[+] Found user %s - requires preauth\n", u.Username)
+			} else {
+				fmt.Printf("[-] %s\n", err)
 			}
 		} else {
 			fmt.Printf("[+] Found user %s - does not require preauth!\n\n%s\n\n", u.Username, tgs.Hash)
@@ -100,6 +102,8 @@ func (o *Krb5Options) bruteforce(target string) error {
 	for _, u := range o.credentials {
 		if ok, _ := client.TestLogin(u.Username, u.Password); ok {
 			fmt.Printf("[+] Login successful! %s:%s\n", u.Username, u.Password)
+		} else {
+			fmt.Printf("[-] %s:%s WRONG CREDENTIALS\n", u.Username, u.Password)
 		}
 	}
 	return nil

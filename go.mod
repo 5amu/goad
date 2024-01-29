@@ -3,8 +3,11 @@ module github.com/5amu/goad
 go 1.21.4
 
 require (
+	github.com/5amu/go-flags v0.0.0-20240129164246-3942f39c22b8
 	github.com/go-ldap/ldap/v3 v3.4.6
-	github.com/jessevdk/go-flags v1.5.0
+	github.com/jcmturner/gokrb5 v8.4.4+incompatible
+	github.com/jcmturner/gokrb5/v8 v8.4.4
+	github.com/masterzen/winrm v0.0.0-20231227165926-e811dad5ac77
 )
 
 require (
@@ -20,21 +23,14 @@ require (
 	github.com/hashicorp/go-cleanhttp v0.5.2 // indirect
 	github.com/hashicorp/go-uuid v1.0.3 // indirect
 	github.com/jcmturner/aescts/v2 v2.0.0 // indirect
+	github.com/jcmturner/dnsutils/v2 v2.0.0 // indirect
+	github.com/jcmturner/gofork v1.7.6 // indirect
 	github.com/jcmturner/goidentity/v6 v6.0.1 // indirect
 	github.com/jcmturner/rpc/v2 v2.0.3 // indirect
 	github.com/masterzen/simplexml v0.0.0-20190410153822-31eea3082786 // indirect
-	github.com/masterzen/winrm v0.0.0-20231227165926-e811dad5ac77 // indirect
-	github.com/stretchr/testify v1.8.4 // indirect
 	github.com/tidwall/transform v0.0.0-20201103190739-32f242e2dbde // indirect
 	golang.org/x/crypto v0.17.0 // indirect
 	golang.org/x/net v0.19.0 // indirect
 	golang.org/x/sys v0.15.0 // indirect
 	golang.org/x/text v0.14.0 // indirect
-)
-
-require (
-	github.com/jcmturner/dnsutils/v2 v2.0.0 // indirect
-	github.com/jcmturner/gofork v1.7.6 // indirect
-	github.com/jcmturner/gokrb5 v8.4.4+incompatible
-	github.com/jcmturner/gokrb5/v8 v8.4.4
 )
