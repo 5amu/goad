@@ -11,6 +11,7 @@ import (
 type MainOptions struct {
 	FTP   struct{}         `command:"ftp" description:"own stuff using SMB"`
 	LDAP  goad.LdapOptions `command:"ldap" description:"own stuff using LDAP"`
+	KRB5  goad.Krb5Options `command:"krb5" description:"own stuff using Kerberos"`
 	MSSQL struct{}         `command:"mssql" description:"own stuff using MSSQL"`
 	RDP   struct{}         `command:"rdp" description:"own stuff using RDP"`
 	SMB   struct{}         `command:"smb" description:"own stuff using SMB"`
@@ -35,6 +36,10 @@ func main() {
 		//}
 	} else if p.Command.Find("ldap") == p.Active {
 		if err := opts.LDAP.Run(); err != nil {
+			fmt.Println(err)
+		}
+	} else if p.Command.Find("krb5") == p.Active {
+		if err := opts.KRB5.Run(); err != nil {
 			fmt.Println(err)
 		}
 	} else if p.Command.Find("mssql") == p.Active {
