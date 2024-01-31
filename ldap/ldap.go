@@ -57,13 +57,11 @@ func (c *LdapClient) Connect() error {
 		return err
 	}
 
-	if c.UseSSL {
-		l, err := ldap.DialTLS("tcp", fmt.Sprintf("%s:%d", c.Host, c.Port), &tls.Config{
+	if !c.SkipTLS {
+		return c.Conn.StartTLS(&tls.Config{
 			InsecureSkipVerify: true,
 			ServerName:         c.Host,
 		})
-		c.Conn = l
-		return err
 	}
 	return nil
 }
