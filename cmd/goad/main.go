@@ -9,16 +9,16 @@ import (
 )
 
 type MainOptions struct {
-	FTP   struct{}         `command:"ftp" description:"own stuff using SMB"`
-	LDAP  goad.LdapOptions `command:"ldap" description:"own stuff using LDAP"`
-	KRB5  goad.Krb5Options `command:"krb5" description:"own stuff using Kerberos"`
-	MSSQL struct{}         `command:"mssql" description:"own stuff using MSSQL"`
-	RDP   struct{}         `command:"rdp" description:"own stuff using RDP"`
-	SMB   struct{}         `command:"smb" description:"own stuff using SMB"`
-	SSH   struct{}         `command:"ssh" description:"own stuff using SSH"`
-	VNC   struct{}         `command:"vnc" description:"own stuff using VNC"`
-	WINRM struct{}         `command:"winrm" description:"own stuff using WINRM"`
-	WMI   struct{}         `command:"wmi" description:"own stuff using WMI"`
+	FTP   struct{}          `command:"ftp" description:"own stuff using SMB"`
+	LDAP  goad.LdapOptions  `command:"ldap" description:"own stuff using LDAP"`
+	KRB5  goad.Krb5Options  `command:"krb5" description:"own stuff using Kerberos"`
+	MSSQL struct{}          `command:"mssql" description:"own stuff using MSSQL"`
+	RDP   struct{}          `command:"rdp" description:"own stuff using RDP"`
+	SMB   struct{}          `command:"smb" description:"own stuff using SMB"`
+	SSH   struct{}          `command:"ssh" description:"own stuff using SSH"`
+	VNC   struct{}          `command:"vnc" description:"own stuff using VNC"`
+	WINRM goad.WinrmOptions `command:"winrm" description:"own stuff using WINRM"`
+	WMI   struct{}          `command:"wmi" description:"own stuff using WMI"`
 }
 
 func main() {
@@ -63,9 +63,9 @@ func main() {
 		//	fmt.Println(err)
 		//}
 	} else if p.Command.Find("winrm") == p.Active {
-		//if err := opts.SMB.Run(); err != nil {
-		//	fmt.Println(err)
-		//}
+		if err := opts.WINRM.Run(); err != nil {
+			fmt.Println(err)
+		}
 	} else if p.Command.Find("wmi") == p.Active {
 		//if err := opts.SMB.Run(); err != nil {
 		//	fmt.Println(err)
