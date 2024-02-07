@@ -4,10 +4,12 @@ go 1.21.4
 
 require (
 	github.com/5amu/go-flags v0.0.0-20240129164246-3942f39c22b8
+	github.com/fatih/color v1.16.0
 	github.com/go-ldap/ldap/v3 v3.4.6
 	github.com/jcmturner/gokrb5 v8.4.4+incompatible
 	github.com/jcmturner/gokrb5/v8 v8.4.4
 	github.com/masterzen/winrm v0.0.0-20231227165926-e811dad5ac77
+	github.com/rodaine/table v1.1.1
 )
 
 require (
@@ -16,7 +18,6 @@ require (
 	github.com/alexbrainman/sspi v0.0.0-20210105120005-909beea2cc74 // indirect
 	github.com/bodgit/ntlmssp v0.0.0-20231122144230-2b2bca29f22b // indirect
 	github.com/bodgit/windows v1.0.1 // indirect
-	github.com/fatih/color v1.16.0 // indirect
 	github.com/go-asn1-ber/asn1-ber v1.5.5 // indirect
 	github.com/go-logr/logr v1.3.0 // indirect
 	github.com/gofrs/uuid v4.4.0+incompatible // indirect
@@ -31,7 +32,6 @@ require (
 	github.com/masterzen/simplexml v0.0.0-20190410153822-31eea3082786 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
-	github.com/rodaine/table v1.1.1 // indirect
 	github.com/tidwall/transform v0.0.0-20201103190739-32f242e2dbde // indirect
 	golang.org/x/crypto v0.17.0 // indirect
 	golang.org/x/net v0.19.0 // indirect
