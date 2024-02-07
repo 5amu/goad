@@ -8,7 +8,7 @@ builds:
   id: goad-cli
 
   env:
-  - CGO_ENABLED=0
+    - CGO_ENABLED=0
 
   goos: [windows,linux,darwin]
   goarch: [amd64,386,arm,arm64]
@@ -20,8 +20,8 @@ builds:
     - goos: windows
       goarch: arm64
 
-    flags:
-      - -trimpath
+  flags:
+    - -trimpath
 
   archives:
   - format: zip
