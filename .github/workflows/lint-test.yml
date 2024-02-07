@@ -1,6 +1,8 @@
 name: 🤞🏼 Lint Test
 
 on:
+  push:
+    branches: [ "main" ]
   pull_request:
     paths:
       - '**.go'
