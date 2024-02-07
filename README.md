@@ -9,6 +9,9 @@
 
 <p align="center">
     <img src="https://img.shields.io/github/go-mod/go-version/5amu/goad">
+    <img src="https://github.com/5amu/goad/actions/workflows/build-test.yml/badge.svg">
+    <img src="https://github.com/5amu/goad/actions/workflows/lint-test.yml/badge.svg">
+    <img src="https://github.com/5amu/goad/actions/workflows/release.yml/badge.svg">
 </p>
 
 ---

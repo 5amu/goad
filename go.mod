@@ -1,6 +1,6 @@
 module github.com/5amu/goad
 
-go 1.21.4
+go 1.21
 
 require (
 	github.com/5amu/go-flags v0.0.0-20240129164246-3942f39c22b8
