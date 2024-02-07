@@ -3,6 +3,9 @@ name: 🤞🏼 Lint Test
 on:
   push:
     branches: [ "main" ]
+    paths:
+      - '**.go'
+      - '**.mod'
   pull_request:
     paths:
       - '**.go'
