@@ -232,6 +232,7 @@ func (o *LdapOptions) kerberoast(target string) error {
 			}
 
 			hash := kerberos.TGSToHashcat(tgs.Ticket, obj.SAMAccountName)
+			hashes = append(hashes, hash)
 			tbl.AddRow("LDAP", target, o.Connection.Domain, obj.SAMAccountName, spn, fmt.Sprintf("%s...%s", hash[:30], hash[len(hash)-10:]))
 		}
 		return nil
