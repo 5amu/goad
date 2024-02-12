@@ -4,7 +4,22 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+
+	"github.com/fatih/color"
+	"github.com/rodaine/table"
 )
+
+func initializeTable(h ...interface{}) table.Table {
+	t := table.New(h...)
+	t.WithHeaderFormatter(color.New(color.FgGreen, color.Underline).SprintfFunc()).WithFirstColumnFormatter(color.New(color.FgYellow).SprintfFunc())
+	t.WithWidthFunc(func(s string) int {
+		if len(s) > 25 {
+			return 25
+		}
+		return len(s)
+	})
+	return t
+}
 
 // readLines reads a whole file into memory
 // and returns a slice of its lines.

@@ -78,18 +78,21 @@ func (o *Krb5Options) userenum(target string) error {
 		return err
 	}
 
+	tbl := initializeTable("Module", "Target", "Domain", "Username", "Status", "Hash")
 	for _, u := range o.credentials {
 		if tgs, err := client.GetAsReqTgt(u.Username); err != nil {
 			_, ok := err.(*kerberos.ErrorRequiresPreauth)
 			if ok {
-				fmt.Printf("[+] Found user %s - requires preauth\n", u.Username)
+				tbl.AddRow("KRB5", target, o.Connection.Domain, u.Username, "Requires Preauth", "")
 			} else {
-				fmt.Printf("[-] %s\n", err)
+				tbl.AddRow("KRB5", target, o.Connection.Domain, u.Username, "Does Not Exist", "")
 			}
 		} else {
-			fmt.Printf("[+] Found user %s - does not require preauth!\n\n%s\n\n", u.Username, tgs.Hash)
+			hash := tgs.Hash
+			tbl.AddRow("KRB5", target, o.Connection.Domain, u.Username, "No Preauth", hash) //fmt.Sprintf("%s...%s", hash[:30], hash[len(hash)-10:]))
 		}
 	}
+	tbl.Print()
 	return nil
 }
 
