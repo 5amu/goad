@@ -4,8 +4,9 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/5amu/goad/kerberos"
-	"github.com/5amu/goad/ldap"
+	"github.com/5amu/goad/internal/utils"
+	"github.com/5amu/goad/pkg/kerberos"
+	"github.com/5amu/goad/pkg/ldap"
 	"github.com/fatih/color"
 	"github.com/rodaine/table"
 )
@@ -57,17 +58,17 @@ type LdapOptions struct {
 
 	targets     []string
 	filter      string
-	credentials []credential
+	credentials []utils.Credential
 }
 
 func (o *LdapOptions) Run() (err error) {
 	if o.Connection.NTLM != "" {
-		o.credentials = NewCredentialsNTLM(
+		o.credentials = utils.NewCredentialsNTLM(
 			sliceFromString(o.Connection.Username),
 			o.Connection.NTLM,
 		)
 	} else {
-		o.credentials = NewCredentialsClusterBomb(
+		o.credentials = utils.NewCredentialsClusterBomb(
 			sliceFromString(o.Connection.Username),
 			sliceFromString(o.Connection.Password),
 		)
@@ -157,7 +158,7 @@ func (o *LdapOptions) Run() (err error) {
 	return nil
 }
 
-func (o *LdapOptions) authenticate(ldapClient *ldap.LdapClient) (credential, error) {
+func (o *LdapOptions) authenticate(ldapClient *ldap.LdapClient) (utils.Credential, error) {
 	for _, creds := range o.credentials {
 		if creds.Hash != "" {
 			if err := ldapClient.AuthenticateNTLM(creds.Username, creds.Hash); err != nil {
@@ -173,7 +174,7 @@ func (o *LdapOptions) authenticate(ldapClient *ldap.LdapClient) (credential, err
 			}
 		}
 	}
-	return credential{}, fmt.Errorf("no valid authentication")
+	return utils.Credential{}, fmt.Errorf("no valid authentication")
 }
 
 func (o *LdapOptions) asreproast(target string) error {
