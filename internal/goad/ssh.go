@@ -108,7 +108,7 @@ func (o *SshOptions) exec(target string) error {
 
 	out := stdoutBuff.String() + stderrBuff.String()
 	splitted := strings.Split(out, "\n")
-	for _, s := range splitted {
+	for _, s := range splitted[:len(splitted)-1] {
 		prt.Print(s)
 	}
 	return nil
