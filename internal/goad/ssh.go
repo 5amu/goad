@@ -57,7 +57,9 @@ func (o *SshOptions) Run() error {
 	for _, target := range o.targets {
 		wg.Add(1)
 		go func(t string) {
-			f(t)
+			if err := f(t); err != nil {
+				fmt.Println(err)
+			}
 			wg.Done()
 		}(target)
 	}
