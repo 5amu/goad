@@ -1,11 +1,14 @@
 package goad
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"os"
+	"strings"
 	"sync"
 
+	"github.com/5amu/goad/internal/printer"
 	"github.com/5amu/goad/internal/utils"
 	"github.com/masterzen/winrm"
 )
@@ -71,24 +74,37 @@ func (o *WinrmOptions) exec(target string) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	var client *winrm.Client
+	prt := printer.NewPrinter("WINRM", target, "", o.Connection.Port)
 	for _, cred := range o.credentials {
+		var err error
 		params := winrm.DefaultParameters
 		params.TransportDecorator = func() winrm.Transporter { return &winrm.ClientNTLM{} }
-		client, err := winrm.NewClientWithParameters(
+		client, err = winrm.NewClientWithParameters(
 			winrm.NewEndpoint(target, o.Connection.Port, o.Connection.SSL, true, nil, nil, nil, 0),
 			cred.Username,
 			cred.Password,
 			params,
 		)
 		if err != nil {
+			prt.PrintFailure(cred.StringWithDomain(o.Connection.Domain))
 			continue
-		}
-		_, err = client.RunWithContext(ctx, o.cmd, os.Stdout, os.Stderr)
-		if err != nil {
-			return err
+		} else {
+			prt.PrintSuccess(cred.StringWithDomain(o.Connection.Domain))
+			break
 		}
 	}
 
+	var stdoutBuff, stderrBuff bytes.Buffer
+	_, err := client.RunWithContext(ctx, o.cmd, &stdoutBuff, &stderrBuff)
+	if err != nil {
+		return err
+	}
+	out := stdoutBuff.String() + stderrBuff.String()
+	splitted := strings.Split(out, "\n")
+	for _, s := range splitted {
+		prt.Print(s)
+	}
 	return nil
 }
 

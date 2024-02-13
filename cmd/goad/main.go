@@ -35,6 +35,9 @@ func main() {
 		os.Exit(1)
 	}
 
+	fmt.Println()
+	defer fmt.Println()
+
 	if p.Command.Find("ftp") == p.Active {
 		if err := opts.FTP.Run(); err != nil {
 			fmt.Println(err)

@@ -95,6 +95,7 @@ const (
 	PasswordLastSet            = "pwdLastSet"
 	LastLogon                  = "lastLogon"
 	MemberOf                   = "memberOf"
+	Description                = "description"
 )
 
 func JoinFilters(filters ...string) string {

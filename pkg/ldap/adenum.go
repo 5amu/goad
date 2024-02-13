@@ -11,6 +11,7 @@ type ADObject struct {
 	SAMAccountName       string
 	PWDLastSet           string
 	LastLogon            string
+	Description          string
 	MemberOf             []string
 	ServicePrincipalName []string
 }
@@ -27,6 +28,7 @@ func (c *LdapClient) FindADObjects(filter string) ([]ADObject, error) {
 			LastLogon,
 			MemberOf,
 			ServicePrincipalName,
+			Description,
 		},
 		nil,
 	)
@@ -49,6 +51,7 @@ func (c *LdapClient) FindADObjects(filter string) ([]ADObject, error) {
 			LastLogon:            DecodeADTimestamp(obj.GetAttributeValue(LastLogon)),
 			MemberOf:             obj.GetAttributeValues(MemberOf),
 			ServicePrincipalName: obj.GetAttributeValues(ServicePrincipalName),
+			Description:          obj.GetAttributeValue(Description),
 		})
 	}
 	return objects, nil
