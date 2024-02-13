@@ -28,10 +28,3 @@ archives:
 checksum:
   algorithm: sha256
   name_template: "{{ .ProjectName }}_checksums.txt"
-
-changelog:
-  sort: desc
-  filters:
-    exclude:
-      - '^MERGE'
-      - "{{ .Tag }}"
