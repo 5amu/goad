@@ -6,6 +6,7 @@ import (
 	"os"
 	"sync"
 
+	"github.com/5amu/goad/internal/utils"
 	"github.com/masterzen/winrm"
 )
 
@@ -28,7 +29,7 @@ type WinrmOptions struct {
 	} `group:"Execution Mode"`
 
 	targets     []string
-	credentials []credential
+	credentials []utils.Credential
 	cmd         string
 }
 
@@ -37,7 +38,7 @@ func (o *WinrmOptions) Run() error {
 		o.targets = append(o.targets, sliceFromString(t)...)
 	}
 
-	o.credentials = NewCredentialsClusterBomb(
+	o.credentials = utils.NewCredentialsClusterBomb(
 		sliceFromString(o.Connection.Username),
 		sliceFromString(o.Connection.Password),
 	)

@@ -4,7 +4,8 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/5amu/goad/kerberos"
+	"github.com/5amu/goad/internal/utils"
+	"github.com/5amu/goad/pkg/kerberos"
 )
 
 type Krb5Options struct {
@@ -29,7 +30,7 @@ type Krb5Options struct {
 	} `group:"Bruteforce Strategy"`
 
 	targets     []string
-	credentials []credential
+	credentials []utils.Credential
 }
 
 func (o *Krb5Options) Run() error {
@@ -38,12 +39,12 @@ func (o *Krb5Options) Run() error {
 	}
 
 	if o.BruteforceStrategy.Pitchfork {
-		o.credentials = NewCredentialsPitchFork(
+		o.credentials = utils.NewCredentialsPitchFork(
 			sliceFromString(o.Connection.Username),
 			sliceFromString(o.Connection.Password),
 		)
 	} else {
-		o.credentials = NewCredentialsClusterBomb(
+		o.credentials = utils.NewCredentialsClusterBomb(
 			sliceFromString(o.Connection.Username),
 			sliceFromString(o.Connection.Password),
 		)
