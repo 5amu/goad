@@ -57,9 +57,7 @@ func (o *SshOptions) Run() error {
 	for _, target := range o.targets {
 		wg.Add(1)
 		go func(t string) {
-			if err := f(t); err != nil {
-				fmt.Println(err)
-			}
+			f(t)
 			wg.Done()
 		}(target)
 	}
@@ -67,11 +65,7 @@ func (o *SshOptions) Run() error {
 	return nil
 }
 
-func (o *SshOptions) exec(target string) error {
-	banner, err := ssh.GrabBanner(fmt.Sprintf("%s:%d", target, o.Connection.Port))
-	if err != nil {
-		return err
-	}
+func (o *SshOptions) authenticate(target string, banner string) (*ssh.Client, error) {
 	prt := printer.NewPrinter("SSH", target, banner, o.Connection.Port)
 
 	var c *ssh.Client
@@ -95,10 +89,24 @@ func (o *SshOptions) exec(target string) error {
 		if err != nil {
 			prt.PrintFailure(cred.String())
 			continue
-		} else {
-			prt.PrintSuccess(cred.String())
-			break
 		}
+		prt.PrintSuccess(cred.String())
+		return c, nil
+	}
+	return nil, fmt.Errorf("no valid credential provided")
+}
+
+func (o *SshOptions) exec(target string) error {
+	banner, err := ssh.GrabBanner(fmt.Sprintf("%s:%d", target, o.Connection.Port))
+	if err != nil {
+		return err
+	}
+
+	prt := printer.NewPrinter("SSH", target, banner, o.Connection.Port)
+	c, err := o.authenticate(target, banner)
+	if err != nil {
+		prt.PrintFailure(err.Error())
+		return err
 	}
 
 	var stdoutBuff, stderrBuff bytes.Buffer
