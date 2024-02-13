@@ -1,10 +1,12 @@
 package goad
 
 import (
+	"bytes"
 	"fmt"
-	"os"
+	"strings"
 	"sync"
 
+	"github.com/5amu/goad/internal/printer"
 	"github.com/5amu/goad/internal/utils"
 	"github.com/5amu/goad/pkg/ssh"
 )
@@ -66,9 +68,15 @@ func (o *SshOptions) Run() error {
 }
 
 func (o *SshOptions) exec(target string) error {
+	banner, err := ssh.GrabBanner(fmt.Sprintf("%s:%d", target, o.Connection.Port))
+	if err != nil {
+		return err
+	}
+	prt := printer.NewPrinter("SSH", target, banner, o.Connection.Port)
+
+	var c *ssh.Client
 	for _, cred := range o.credentials {
 		var err error
-		var c *ssh.Client
 		if o.Connection.PrivKey != "" {
 			c, err = ssh.ConnectWithKey(
 				cred.Username,
@@ -85,14 +93,24 @@ func (o *SshOptions) exec(target string) error {
 			)
 		}
 		if err != nil {
+			prt.PrintFailure(cred.String())
 			continue
-		}
-
-		if err := c.Run(o.cmd, os.Stdout, os.Stderr); err != nil {
-			fmt.Println(err)
+		} else {
+			prt.PrintSuccess(cred.String())
+			break
 		}
 	}
 
+	var stdoutBuff, stderrBuff bytes.Buffer
+	if err := c.Run(o.cmd, &stdoutBuff, &stderrBuff); err != nil {
+		prt.PrintFailure(err.Error())
+	}
+
+	out := stdoutBuff.String() + stderrBuff.String()
+	splitted := strings.Split(out, "\n")
+	for _, s := range splitted {
+		prt.Print(s)
+	}
 	return nil
 }
 

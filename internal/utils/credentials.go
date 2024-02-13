@@ -40,3 +40,10 @@ func (c *Credential) String() string {
 	}
 	return fmt.Sprintf("%s:%s", c.Username, c.Password)
 }
+
+func (c *Credential) StringWithDomain(domain string) string {
+	if c.Hash != "" {
+		return fmt.Sprintf("%s\\%s:%s", domain, c.Username, c.Hash)
+	}
+	return fmt.Sprintf("%s\\%s:%s", domain, c.Username, c.Password)
+}

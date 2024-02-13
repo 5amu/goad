@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/5amu/goad/internal/printer"
 	"github.com/5amu/goad/internal/utils"
 	"github.com/5amu/goad/pkg/kerberos"
 )
@@ -79,21 +80,21 @@ func (o *Krb5Options) userenum(target string) error {
 		return err
 	}
 
-	tbl := initializeTable("Module", "Target", "Domain", "Username", "Status", "Hash")
+	prt := printer.NewPrinter("KRB5", target, "", 88)
 	for _, u := range o.credentials {
 		if tgs, err := client.GetAsReqTgt(u.Username); err != nil {
 			_, ok := err.(*kerberos.ErrorRequiresPreauth)
 			if ok {
-				tbl.AddRow("KRB5", target, o.Connection.Domain, u.Username, "Requires Preauth", "")
+				prt.PrintSuccess(u.StringWithDomain(o.Connection.Domain), "Requires Preauth")
 			} else {
-				tbl.AddRow("KRB5", target, o.Connection.Domain, u.Username, "Does Not Exist", "")
+				prt.PrintFailure(u.StringWithDomain(o.Connection.Domain), "Does Not Exist")
 			}
 		} else {
 			hash := tgs.Hash
-			tbl.AddRow("KRB5", target, o.Connection.Domain, u.Username, "No Preauth", hash) //fmt.Sprintf("%s...%s", hash[:30], hash[len(hash)-10:]))
+			prt.PrintSuccess(u.StringWithDomain(o.Connection.Domain), "No Preauth")
+			prt.Print(hash)
 		}
 	}
-	tbl.Print()
 	return nil
 }
 
@@ -103,11 +104,12 @@ func (o *Krb5Options) bruteforce(target string) error {
 		return err
 	}
 
+	prt := printer.NewPrinter("KRB5", target, "", 88)
 	for _, u := range o.credentials {
 		if ok, _ := client.TestLogin(u.Username, u.Password); ok {
-			fmt.Printf("[+] Login successful! %s:%s\n", u.Username, u.Password)
+			prt.PrintSuccess(u.StringWithDomain(o.Connection.Domain))
 		} else {
-			fmt.Printf("[-] %s:%s WRONG CREDENTIALS\n", u.Username, u.Password)
+			prt.PrintFailure(u.StringWithDomain(o.Connection.Domain))
 		}
 	}
 	return nil

