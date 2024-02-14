@@ -65,20 +65,17 @@ type LdapOptions struct {
 func (o *LdapOptions) Run() (err error) {
 	if o.Connection.NTLM != "" {
 		o.credentials = utils.NewCredentialsNTLM(
-			sliceFromString(o.Connection.Username),
+			utils.ExtractLinesFromFileOrString(o.Connection.Username),
 			o.Connection.NTLM,
 		)
 	} else {
 		o.credentials = utils.NewCredentialsClusterBomb(
-			sliceFromString(o.Connection.Username),
-			sliceFromString(o.Connection.Password),
+			utils.ExtractLinesFromFileOrString(o.Connection.Username),
+			utils.ExtractLinesFromFileOrString(o.Connection.Password),
 		)
 	}
 
-	for _, t := range o.Targets.TARGETS {
-		o.targets = append(o.targets, sliceFromString(t)...)
-	}
-
+	o.targets = utils.ExtractTargets(o.Targets.TARGETS)
 	o.target2SMBInfo = make(map[string]*smb.SMBInfo)
 	for _, t := range o.targets {
 		o.target2SMBInfo[t] = getSMBInfo(t)
@@ -222,7 +219,7 @@ func (o *LdapOptions) asreproast(target string) error {
 	}
 
 	prt.Print("Saving hashes to", o.Hashes.AsrepRoast)
-	return writeLines(hashes, o.Hashes.AsrepRoast)
+	return utils.WriteLines(hashes, o.Hashes.AsrepRoast)
 }
 
 func (o *LdapOptions) kerberoast(target string) error {
@@ -271,7 +268,7 @@ func (o *LdapOptions) kerberoast(target string) error {
 	}
 
 	prt.Print("Saving hashes to", o.Hashes.Kerberoast)
-	return writeLines(hashes, o.Hashes.Kerberoast)
+	return utils.WriteLines(hashes, o.Hashes.Kerberoast)
 }
 
 func (o *LdapOptions) enumeration(target string) error {

@@ -37,19 +37,19 @@ func getSMBInfo(host string) *smb.SMBInfo {
 func (o *SmbOptions) Run() error {
 	if o.Connection.NTLM != "" {
 		o.credentials = utils.NewCredentialsNTLM(
-			sliceFromString(o.Connection.Username),
+			utils.ExtractLinesFromFileOrString(o.Connection.Username),
 			o.Connection.NTLM,
 		)
 	} else {
 		o.credentials = utils.NewCredentialsClusterBomb(
-			sliceFromString(o.Connection.Username),
-			sliceFromString(o.Connection.Password),
+			utils.ExtractLinesFromFileOrString(o.Connection.Username),
+			utils.ExtractLinesFromFileOrString(o.Connection.Password),
 		)
 	}
 
 	for _, t := range o.Targets.TARGETS {
 		getSMBInfo(t)
-		o.targets = append(o.targets, sliceFromString(t)...)
+		o.targets = append(o.targets, utils.ExtractLinesFromFileOrString(t)...)
 	}
 	return nil
 }

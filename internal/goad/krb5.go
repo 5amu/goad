@@ -37,10 +37,7 @@ type Krb5Options struct {
 }
 
 func (o *Krb5Options) Run() error {
-	for _, t := range o.Targets.TARGETS {
-		o.targets = append(o.targets, sliceFromString(t)...)
-	}
-
+	o.targets = utils.ExtractTargets(o.Targets.TARGETS)
 	o.target2SMBInfo = make(map[string]*smb.SMBInfo)
 	for _, t := range o.targets {
 		o.target2SMBInfo[t] = getSMBInfo(t)
@@ -48,13 +45,13 @@ func (o *Krb5Options) Run() error {
 
 	if o.BruteforceStrategy.Pitchfork {
 		o.credentials = utils.NewCredentialsPitchFork(
-			sliceFromString(o.Connection.Username),
-			sliceFromString(o.Connection.Password),
+			utils.ExtractLinesFromFileOrString(o.Connection.Username),
+			utils.ExtractLinesFromFileOrString(o.Connection.Password),
 		)
 	} else {
 		o.credentials = utils.NewCredentialsClusterBomb(
-			sliceFromString(o.Connection.Username),
-			sliceFromString(o.Connection.Password),
+			utils.ExtractLinesFromFileOrString(o.Connection.Username),
+			utils.ExtractLinesFromFileOrString(o.Connection.Password),
 		)
 	}
 
