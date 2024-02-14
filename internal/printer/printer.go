@@ -64,14 +64,14 @@ func (p *Printer) SetConfigs(cfg *PrinterConfig) *Printer {
 func (p *Printer) print(symbol string, msg ...string) {
 	var row strings.Builder
 	row.WriteString(p.config.FirstColumnFormatter("%-8s", p.module))
-	row.WriteString(fmt.Sprintf("%-15s", p.target))
+	row.WriteString(fmt.Sprintf("%-16s", p.target))
 	row.WriteString(fmt.Sprintf("%-5d", p.port))
-	row.WriteString(fmt.Sprintf("%-20s", p.netbios))
+	row.WriteString(fmt.Sprintf("%-16s", p.netbios))
 
 	var message strings.Builder
 	for _, part := range msg {
-		message.WriteString(fmt.Sprintf("%-30s", part))
-		if len(part) > 30 {
+		message.WriteString(fmt.Sprintf("%-40s", part))
+		if len(part) > 37 {
 			message.WriteString(fmt.Sprintf("%-3s", ""))
 		}
 	}
@@ -99,6 +99,13 @@ func (p *Printer) PrintSuccess(msg ...string) {
 func (p *Printer) PrintFailure(msg ...string) {
 	p.print(
 		p.config.FailureFormatter("%s ", p.config.FailureSymbol),
+		msg...,
+	)
+}
+
+func (p *Printer) PrintInfo(msg ...string) {
+	p.print(
+		color.BlueString("%s ", p.config.SuccessSymbol),
 		msg...,
 	)
 }

@@ -10,6 +10,7 @@ import (
 
 	"github.com/5amu/goad/internal/printer"
 	"github.com/5amu/goad/internal/utils"
+	"github.com/5amu/goad/pkg/smb"
 	"github.com/masterzen/winrm"
 )
 
@@ -31,14 +32,20 @@ type WinrmOptions struct {
 		Shell bool   `long:"shell" description:"Spawn a powershell shell"`
 	} `group:"Execution Mode"`
 
-	targets     []string
-	credentials []utils.Credential
-	cmd         string
+	targets        []string
+	target2SMBInfo map[string]*smb.SMBInfo
+	credentials    []utils.Credential
+	cmd            string
 }
 
 func (o *WinrmOptions) Run() error {
 	for _, t := range o.Targets.TARGETS {
 		o.targets = append(o.targets, sliceFromString(t)...)
+	}
+
+	o.target2SMBInfo = make(map[string]*smb.SMBInfo)
+	for _, t := range o.targets {
+		o.target2SMBInfo[t] = getSMBInfo(t)
 	}
 
 	o.credentials = utils.NewCredentialsClusterBomb(
@@ -75,7 +82,7 @@ func (o *WinrmOptions) exec(target string) error {
 	defer cancel()
 
 	var client *winrm.Client
-	prt := printer.NewPrinter("WINRM", target, "", o.Connection.Port)
+	prt := printer.NewPrinter("WINRM", target, o.target2SMBInfo[target].NetBIOSName, o.Connection.Port)
 	for _, cred := range o.credentials {
 		var err error
 		params := winrm.DefaultParameters

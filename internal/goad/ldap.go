@@ -8,6 +8,7 @@ import (
 	"github.com/5amu/goad/internal/utils"
 	"github.com/5amu/goad/pkg/kerberos"
 	"github.com/5amu/goad/pkg/ldap"
+	"github.com/5amu/goad/pkg/smb"
 )
 
 type LdapOptions struct {
@@ -55,9 +56,10 @@ type LdapOptions struct {
 		Collection           []string `short:"c" long:"collection" default:"Default" description:"Which information to collect. Supported: Group, LocalAdmin, Session, Trusts, Default, DCOnly, DCOM, RDP, PSRemote, LoggedOn, Container, ObjectProps, ACL, All"`
 	} `group:"Run Bloodhound Collector v4.2" description:"Run Bloodhound Collector v4.2"`
 
-	targets     []string
-	filter      string
-	credentials []utils.Credential
+	targets        []string
+	target2SMBInfo map[string]*smb.SMBInfo
+	filter         string
+	credentials    []utils.Credential
 }
 
 func (o *LdapOptions) Run() (err error) {
@@ -75,6 +77,11 @@ func (o *LdapOptions) Run() (err error) {
 
 	for _, t := range o.Targets.TARGETS {
 		o.targets = append(o.targets, sliceFromString(t)...)
+	}
+
+	o.target2SMBInfo = make(map[string]*smb.SMBInfo)
+	for _, t := range o.targets {
+		o.target2SMBInfo[t] = getSMBInfo(t)
 	}
 
 	var f func(string) error
@@ -158,7 +165,7 @@ func (o *LdapOptions) Run() (err error) {
 }
 
 func (o *LdapOptions) authenticate(ldapClient *ldap.LdapClient) (utils.Credential, error) {
-	prt := printer.NewPrinter("LDAP", ldapClient.Host, "", ldapClient.Port)
+	prt := printer.NewPrinter("LDAP", ldapClient.Host, o.target2SMBInfo[ldapClient.Host].NetBIOSName, ldapClient.Port)
 	for _, creds := range o.credentials {
 		if creds.Hash != "" {
 			if err := ldapClient.AuthenticateNTLM(creds.Username, creds.Hash); err != nil {
@@ -198,7 +205,7 @@ func (o *LdapOptions) asreproast(target string) error {
 	}
 	krb5client.AuthenticateWithPassword(creds.Username, creds.Password)
 
-	prt := printer.NewPrinter("LDAP", target, "", lclient.Port)
+	prt := printer.NewPrinter("LDAP", target, o.target2SMBInfo[target].NetBIOSName, lclient.Port)
 	var hashes []string
 	err = lclient.FindADObjectsWithCallback(ldapFilter, func(obj ldap.ADObject) error {
 		asrep, err := krb5client.GetAsReqTgt(obj.SAMAccountName)
@@ -237,7 +244,7 @@ func (o *LdapOptions) kerberoast(target string) error {
 	}
 	krb5client.AuthenticateWithPassword(creds.Username, creds.Password)
 
-	prt := printer.NewPrinter("LDAP", target, "", lclient.Port)
+	prt := printer.NewPrinter("LDAP", target, o.target2SMBInfo[target].NetBIOSName, lclient.Port)
 	var hashes []string
 	err = lclient.FindADObjectsWithCallback(ldapFilter, func(obj ldap.ADObject) error {
 		if len(obj.ServicePrincipalName) == 0 {
@@ -276,7 +283,7 @@ func (o *LdapOptions) enumeration(target string) error {
 		return err
 	}
 
-	prt := printer.NewPrinter("LDAP", target, "", lclient.Port)
+	prt := printer.NewPrinter("LDAP", target, o.target2SMBInfo[target].NetBIOSName, lclient.Port)
 	return lclient.FindADObjectsWithCallback(o.filter, func(obj ldap.ADObject) error {
 		prt.Print(obj.SAMAccountName, obj.Description)
 		return err
@@ -292,7 +299,7 @@ func (o *LdapOptions) domainSID(target string) error {
 		return err
 	}
 
-	prt := printer.NewPrinter("LDAP", target, "", lclient.Port)
+	prt := printer.NewPrinter("LDAP", target, o.target2SMBInfo[target].NetBIOSName, lclient.Port)
 	sid, err := lclient.GetDomainSID()
 	if err != nil {
 		return err
