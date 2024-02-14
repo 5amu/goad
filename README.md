@@ -39,3 +39,11 @@ goad -h
 # See options for subcommands
 goad ldap -h
 ```
+
+## Caveats
+
+<details>
+    <summary>Pivoting</summary>
+    Support for proxies is not in the scope of the project, but being a Go program it is suggested to use <a href="https://github.com/hmgle/graftcp">https://github.com/hmgle/graftcp</a>, because it intercepts syscall using <code>ptrace</code> instead of relying on the <code>LD_PRELOAD</code> trick. 
+    <br><b>NB: proxychains-ng won't work</b>.
+</details>
