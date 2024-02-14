@@ -7,6 +7,7 @@ import (
 	"github.com/5amu/goad/internal/printer"
 	"github.com/5amu/goad/internal/utils"
 	"github.com/5amu/goad/pkg/kerberos"
+	"github.com/5amu/goad/pkg/smb"
 )
 
 type Krb5Options struct {
@@ -30,13 +31,19 @@ type Krb5Options struct {
 		Pitchfork   bool `long:"pitchfork" description:"payload sets in pitchfork mode"`
 	} `group:"Bruteforce Strategy"`
 
-	targets     []string
-	credentials []utils.Credential
+	targets        []string
+	target2SMBInfo map[string]*smb.SMBInfo
+	credentials    []utils.Credential
 }
 
 func (o *Krb5Options) Run() error {
 	for _, t := range o.Targets.TARGETS {
 		o.targets = append(o.targets, sliceFromString(t)...)
+	}
+
+	o.target2SMBInfo = make(map[string]*smb.SMBInfo)
+	for _, t := range o.targets {
+		o.target2SMBInfo[t] = getSMBInfo(t)
 	}
 
 	if o.BruteforceStrategy.Pitchfork {
@@ -80,7 +87,7 @@ func (o *Krb5Options) userenum(target string) error {
 		return err
 	}
 
-	prt := printer.NewPrinter("KRB5", target, "", 88)
+	prt := printer.NewPrinter("KRB5", target, o.target2SMBInfo[target].NetBIOSName, 88)
 	for _, u := range o.credentials {
 		if tgs, err := client.GetAsReqTgt(u.Username); err != nil {
 			_, ok := err.(*kerberos.ErrorRequiresPreauth)
@@ -104,7 +111,7 @@ func (o *Krb5Options) bruteforce(target string) error {
 		return err
 	}
 
-	prt := printer.NewPrinter("KRB5", target, "", 88)
+	prt := printer.NewPrinter("KRB5", target, o.target2SMBInfo[target].NetBIOSName, 88)
 	for _, u := range o.credentials {
 		if ok, _ := client.TestLogin(u.Username, u.Password); ok {
 			prt.PrintSuccess(u.StringWithDomain(o.Connection.Domain))
