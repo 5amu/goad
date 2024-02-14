@@ -147,7 +147,7 @@ func (o *LdapOptions) Run() (err error) {
 		)
 		f = o.enumeration
 	} else {
-		return fmt.Errorf("nothing to do")
+		return nil
 	}
 
 	var wg sync.WaitGroup

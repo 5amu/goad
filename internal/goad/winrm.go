@@ -60,7 +60,7 @@ func (o *WinrmOptions) Run() error {
 	} else if o.Mode.Shell {
 		f = o.openShell
 	} else {
-		return fmt.Errorf("nothing to do")
+		return nil
 	}
 
 	var wg sync.WaitGroup

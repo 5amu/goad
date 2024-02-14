@@ -64,7 +64,7 @@ func (o *Krb5Options) Run() error {
 	} else if o.Mode.Bruteforce {
 		f = o.bruteforce
 	} else {
-		return fmt.Errorf("nothing to do")
+		return nil
 	}
 
 	var wg sync.WaitGroup

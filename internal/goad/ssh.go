@@ -50,7 +50,7 @@ func (o *SshOptions) Run() error {
 	} else if o.Mode.Shell {
 		f = o.shell
 	} else {
-		return fmt.Errorf("nothing to do")
+		return nil
 	}
 
 	var wg sync.WaitGroup
