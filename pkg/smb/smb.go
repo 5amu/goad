@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/praetorian-inc/fingerprintx/pkg/plugins"
 	"github.com/praetorian-inc/fingerprintx/pkg/plugins/services/smb"
 	zgrabsmb "github.com/zmap/zgrab2/lib/smb/smb"
 )
@@ -33,21 +34,19 @@ func (i *SMBInfo) String() string {
 
 func GatherSMBInfo(host string) (*SMBInfo, error) {
 	var info SMBInfo
-	timeout := 5 * time.Second
+	timeout := 2 * time.Second
 	conn, err := net.Dial("tcp", net.JoinHostPort(host, fmt.Sprintf("%d", 445)))
 	if err != nil {
 		return nil, err
 	}
-	metadata, err := smb.DetectSMBv2(conn, timeout)
+
+	var metadata *plugins.ServiceSMB
+
+	metadata, err = smb.DetectSMBv2(conn, timeout)
 	if err != nil {
 		return nil, err
 	}
 	_ = conn.Close()
-
-	info.WindowsVersion = metadata.OSVersion
-	info.NetBIOSName = metadata.NetBIOSComputerName
-	info.Domain = metadata.DNSDomainName
-	info.DNSComputerName = strings.ToLower(metadata.DNSComputerName)
 
 	conn, err = net.Dial("tcp", fmt.Sprintf("%s:%d", host, 445))
 	if err != nil {
@@ -67,12 +66,21 @@ func GatherSMBInfo(host string) (*SMBInfo, error) {
 	}
 	defer conn.Close()
 
-	info.SigningRequired = data.NegotiationLog.SecurityMode&zgrabsmb.SecurityModeSigningRequired > 0
+	if data != nil {
+		info.SigningRequired = data.NegotiationLog.SecurityMode&zgrabsmb.SecurityModeSigningRequired > 0
+	}
+
+	if metadata != nil {
+		info.WindowsVersion = metadata.OSVersion
+		info.NetBIOSName = metadata.NetBIOSComputerName
+		info.Domain = metadata.DNSDomainName
+		info.DNSComputerName = strings.ToLower(metadata.DNSComputerName)
+	}
 	return &info, nil
 }
 
 func getSMBInfo(conn net.Conn, setupSession, v1 bool) (*zgrabsmb.SMBLog, error) {
-	_ = conn.SetDeadline(time.Now().Add(10 * time.Second))
+	_ = conn.SetDeadline(time.Now().Add(3 * time.Second))
 	defer func() {
 		_ = conn.SetDeadline(time.Time{})
 	}()

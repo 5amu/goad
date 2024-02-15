@@ -1,6 +1,8 @@
 package goad
 
 import (
+	"sync"
+
 	"github.com/5amu/goad/internal/printer"
 	"github.com/5amu/goad/internal/utils"
 	"github.com/5amu/goad/pkg/smb"
@@ -25,8 +27,6 @@ type SmbOptions struct {
 func getSMBInfo(host string) *smb.SMBInfo {
 	data, err := smb.GatherSMBInfo(host)
 	if err != nil {
-		prt := printer.NewPrinter("SMB", host, "", 445)
-		prt.PrintFailure(err.Error())
 		return data
 	}
 	prt := printer.NewPrinter("SMB", host, data.NetBIOSName, 445)
@@ -47,9 +47,16 @@ func (o *SmbOptions) Run() error {
 		)
 	}
 
-	for _, t := range o.Targets.TARGETS {
-		getSMBInfo(t)
-		o.targets = append(o.targets, utils.ExtractLinesFromFileOrString(t)...)
+	o.targets = utils.ExtractTargets(o.Targets.TARGETS)
+
+	var wg sync.WaitGroup
+	for _, t := range o.targets {
+		wg.Add(1)
+		go func(g string) {
+			getSMBInfo(g)
+			wg.Done()
+		}(t)
 	}
+	wg.Wait()
 	return nil
 }
