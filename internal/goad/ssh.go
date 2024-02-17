@@ -28,9 +28,10 @@ type SshOptions struct {
 		Shell bool   `long:"shell" description:"Spawn a shell"`
 	} `group:"Execution Mode"`
 
-	targets     []string
-	credentials []utils.Credential
-	cmd         string
+	targets       []string
+	target2Banner map[string]string
+	credentials   []utils.Credential
+	cmd           string
 }
 
 func (o *SshOptions) Run() error {
@@ -39,6 +40,16 @@ func (o *SshOptions) Run() error {
 		utils.ExtractLinesFromFileOrString(o.Connection.Username),
 		utils.ExtractLinesFromFileOrString(o.Connection.Password),
 	)
+
+	o.target2Banner = map[string]string{}
+	for _, t := range o.targets {
+		s, err := ssh.GrabBanner(fmt.Sprintf("%s:%d", t, o.Connection.Port))
+		prt := printer.NewPrinter("SSH", t, s, o.Connection.Port)
+		if err == nil {
+			prt.PrintInfo(s)
+			o.target2Banner[t] = s
+		}
+	}
 
 	var f func(string) error
 	if o.Mode.Exec != "" {
@@ -64,8 +75,8 @@ func (o *SshOptions) Run() error {
 	return nil
 }
 
-func (o *SshOptions) authenticate(target string, banner string) (*ssh.Client, error) {
-	prt := printer.NewPrinter("SSH", target, banner, o.Connection.Port)
+func (o *SshOptions) authenticate(target string) (*ssh.Client, error) {
+	prt := printer.NewPrinter("SSH", target, o.target2Banner[target], o.Connection.Port)
 
 	var c *ssh.Client
 	for _, cred := range o.credentials {
@@ -96,13 +107,8 @@ func (o *SshOptions) authenticate(target string, banner string) (*ssh.Client, er
 }
 
 func (o *SshOptions) exec(target string) error {
-	banner, err := ssh.GrabBanner(fmt.Sprintf("%s:%d", target, o.Connection.Port))
-	if err != nil {
-		return err
-	}
-
-	prt := printer.NewPrinter("SSH", target, banner, o.Connection.Port)
-	c, err := o.authenticate(target, banner)
+	prt := printer.NewPrinter("SSH", target, o.target2Banner[target], o.Connection.Port)
+	c, err := o.authenticate(target)
 	if err != nil {
 		prt.PrintFailure(err.Error())
 		return err
