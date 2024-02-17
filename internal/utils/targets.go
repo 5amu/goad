@@ -2,11 +2,8 @@ package utils
 
 import (
 	"bufio"
-	"fmt"
 	"net"
 	"os"
-
-	"github.com/5amu/goad/internal/printer"
 )
 
 func readLines(path string) ([]string, error) {
@@ -58,19 +55,6 @@ func ExtractTargets(list []string) []string {
 			res = append(res, o...)
 		} else {
 			res = append(res, l)
-		}
-	}
-	return res
-}
-
-func ConfirmTargets(mode string, targets []string, port int, getBanner func(string) (string, error)) map[string]interface{} {
-	res := make(map[string]interface{})
-	for _, t := range targets {
-		s, err := getBanner(fmt.Sprintf("%s:%d", t, port))
-		prt := printer.NewPrinter(mode, t, s, port)
-		if err == nil {
-			prt.PrintInfo(s)
-			res[t] = s
 		}
 	}
 	return res
