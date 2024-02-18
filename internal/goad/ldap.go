@@ -83,9 +83,11 @@ func (o *LdapOptions) Run() (err error) {
 		wg.Add(1)
 		go func(s string) {
 			v := getSMBInfo(s)
-			mutex.Lock()
-			o.target2SMBInfo[s] = v
-			mutex.Unlock()
+			if v != nil {
+				mutex.Lock()
+				o.target2SMBInfo[s] = v
+				mutex.Unlock()
+			}
 			wg.Done()
 
 		}(t)

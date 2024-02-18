@@ -13,7 +13,7 @@
     <img src="https://github.com/5amu/goad/actions/workflows/lint-test.yml/badge.svg">
     <img src="https://github.com/5amu/goad/actions/workflows/release.yml/badge.svg">
     <a href="https://goreportcard.com/report/github.com/5amu/goad"><img src="https://goreportcard.com/badge/5amu/goad"></a>
-    <a href="https://pkg.go.dev/github.com/5amu/goad"><img href="https://pkg.go.dev/badge/github.com/5amu/goad.svg"></a>
+    <a href="https://pkg.go.dev/github.com/5amu/goad"><img src="https://pkg.go.dev/badge/github.com/5amu/goad.svg"></a>
 </p>
 
 ---
