@@ -2,9 +2,12 @@ package ldap
 
 import (
 	"fmt"
+	"net"
 	"strconv"
 	"strings"
 	"time"
+
+	ldapfingerprint "github.com/praetorian-inc/fingerprintx/pkg/plugins/services/ldap"
 )
 
 func DecodeSID(s string) string {
@@ -55,4 +58,17 @@ func DecodeZuluTimestamp(timestamp string) string {
 		return ""
 	}
 	return zulu.Format("2006-01-02 3:4:5 pm")
+}
+
+func IsLDAP(host string, port int) bool {
+	timeout := 2 * time.Second
+	conn, err := net.DialTimeout("tcp", fmt.Sprintf("%s:%d", host, port), timeout)
+	if err != nil {
+		return false
+	}
+	res, err := ldapfingerprint.DetectLDAP(conn, timeout)
+	if err != nil {
+		return false
+	}
+	return res
 }

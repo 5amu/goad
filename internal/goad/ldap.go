@@ -77,9 +77,20 @@ func (o *LdapOptions) Run() (err error) {
 
 	o.targets = utils.ExtractTargets(o.Targets.TARGETS)
 	o.target2SMBInfo = make(map[string]*smb.SMBInfo)
+	var wg sync.WaitGroup
+	var mutex sync.Mutex
 	for _, t := range o.targets {
-		o.target2SMBInfo[t] = getSMBInfo(t)
+		wg.Add(1)
+		go func(s string) {
+			v := getSMBInfo(s)
+			mutex.Lock()
+			o.target2SMBInfo[s] = v
+			mutex.Unlock()
+			wg.Done()
+
+		}(t)
 	}
+	wg.Wait()
 
 	var f func(string) error
 
@@ -147,12 +158,13 @@ func (o *LdapOptions) Run() (err error) {
 		return nil
 	}
 
-	var wg sync.WaitGroup
 	for _, target := range o.targets {
 		wg.Add(1)
 		go func(t string) {
-			if err := f(t); err != nil {
-				fmt.Println(err)
+			if ldap.IsLDAP(t, o.Connection.Port) {
+				if err := f(t); err != nil {
+					fmt.Println(err)
+				}
 			}
 			wg.Done()
 		}(target)

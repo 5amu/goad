@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/praetorian-inc/fingerprintx/pkg/plugins"
-	"github.com/praetorian-inc/fingerprintx/pkg/plugins/services/smb"
+	smbfingerprint "github.com/praetorian-inc/fingerprintx/pkg/plugins/services/smb"
 	zgrabsmb "github.com/zmap/zgrab2/lib/smb/smb"
 )
 
@@ -34,15 +34,16 @@ func (i *SMBInfo) String() string {
 
 func GatherSMBInfo(host string) (*SMBInfo, error) {
 	var info SMBInfo
-	timeout := 2 * time.Second
-	conn, err := net.Dial("tcp", net.JoinHostPort(host, fmt.Sprintf("%d", 445)))
+	timeout := 3 * time.Second
+
+	conn, err := net.DialTimeout("tcp", net.JoinHostPort(host, fmt.Sprintf("%d", 445)), timeout)
 	if err != nil {
 		return nil, err
 	}
 
 	var metadata *plugins.ServiceSMB
 
-	metadata, err = smb.DetectSMBv2(conn, timeout)
+	metadata, err = smbfingerprint.DetectSMBv2(conn, timeout)
 	if err != nil {
 		return nil, err
 	}
