@@ -30,8 +30,35 @@ type SshOptions struct {
 
 	targets       []string
 	target2Banner map[string]string
+	printMutex    sync.Mutex
 	credentials   []utils.Credential
 	cmd           string
+}
+
+func gatherSSHBanner2Map(mutex *sync.Mutex, targets []string, port int) map[string]string {
+	res := make(map[string]string)
+	var mapMutex sync.Mutex
+
+	mutex.Lock()
+	defer mutex.Unlock()
+
+	var wg sync.WaitGroup
+	for _, t := range targets {
+		wg.Add(1)
+		go func(p string) {
+			s, err := ssh.GrabBanner(fmt.Sprintf("%s:%d", p, port))
+			prt := printer.NewPrinter("SSH", p, s, port)
+			if err == nil {
+				mapMutex.Lock()
+				res[p] = s
+				mapMutex.Unlock()
+				prt.PrintInfo(s)
+			}
+			wg.Done()
+		}(t)
+	}
+	wg.Wait()
+	return res
 }
 
 func (o *SshOptions) Run() error {
@@ -41,17 +68,9 @@ func (o *SshOptions) Run() error {
 		utils.ExtractLinesFromFileOrString(o.Connection.Password),
 	)
 
-	o.target2Banner = map[string]string{}
-	for _, t := range o.targets {
-		s, err := ssh.GrabBanner(fmt.Sprintf("%s:%d", t, o.Connection.Port))
-		prt := printer.NewPrinter("SSH", t, s, o.Connection.Port)
-		if err == nil {
-			prt.PrintInfo(s)
-			o.target2Banner[t] = s
-		}
-	}
+	o.target2Banner = gatherSSHBanner2Map(&o.printMutex, o.targets, o.Connection.Port)
 
-	var f func(string) error
+	var f func(string)
 	if o.Mode.Exec != "" {
 		o.cmd = o.Mode.Exec
 		f = o.exec
@@ -65,9 +84,9 @@ func (o *SshOptions) Run() error {
 	for _, target := range o.targets {
 		wg.Add(1)
 		go func(t string) {
-			if err := f(t); err != nil {
-				fmt.Println(err)
-			}
+			o.printMutex.Lock()
+			f(t)
+			o.printMutex.Unlock()
 			wg.Done()
 		}(target)
 	}
@@ -77,6 +96,7 @@ func (o *SshOptions) Run() error {
 
 func (o *SshOptions) authenticate(target string) (*ssh.Client, error) {
 	prt := printer.NewPrinter("SSH", target, o.target2Banner[target], o.Connection.Port)
+	defer prt.PrintStored(&o.printMutex)
 
 	var c *ssh.Client
 	for _, cred := range o.credentials {
@@ -97,39 +117,44 @@ func (o *SshOptions) authenticate(target string) (*ssh.Client, error) {
 			)
 		}
 		if err != nil {
-			prt.PrintFailure(cred.String())
+			prt.StoreFailure(cred.String())
 			continue
 		}
-		prt.PrintSuccess(cred.String())
+		prt.StoreSuccess(cred.String())
 		return c, nil
 	}
 	return nil, fmt.Errorf("no valid credential provided")
 }
 
-func (o *SshOptions) exec(target string) error {
+func (o *SshOptions) exec(target string) {
 	prt := printer.NewPrinter("SSH", target, o.target2Banner[target], o.Connection.Port)
+	defer prt.PrintStored(&o.printMutex)
+
 	c, err := o.authenticate(target)
 	if err != nil {
-		prt.PrintFailure(err.Error())
-		return err
+		prt.StoreFailure(err.Error())
+		return
 	}
 
 	var stdoutBuff, stderrBuff bytes.Buffer
 	if err := c.Run(o.cmd, &stdoutBuff, &stderrBuff); err != nil {
-		prt.PrintFailure(err.Error())
+		prt.StoreFailure(err.Error())
 	}
 
 	out := stdoutBuff.String() + stderrBuff.String()
 	splitted := strings.Split(out, "\n")
 	for _, s := range splitted[:len(splitted)-1] {
-		prt.Print(s)
+		prt.Store(s)
 	}
-	return nil
 }
 
-func (o *SshOptions) shell(target string) error {
+func (o *SshOptions) shell(target string) {
+	prt := printer.NewPrinter("SSH", target, o.target2Banner[target], o.Connection.Port)
+	defer prt.PrintStored(&o.printMutex)
+
 	if len(o.credentials) != 1 {
-		return fmt.Errorf("provide 1 set of credentials")
+		prt.StoreFailure("provide 1 set of credentials")
+		return
 	}
 
 	var err error
@@ -150,7 +175,12 @@ func (o *SshOptions) shell(target string) error {
 		)
 	}
 	if err != nil {
-		return err
+		prt.StoreFailure(err.Error())
+		return
 	}
-	return c.Shell()
+	err = c.Shell()
+	if err != nil {
+		prt.StoreFailure(err.Error())
+		return
+	}
 }

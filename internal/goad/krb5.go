@@ -21,8 +21,7 @@ type Krb5Options struct {
 	} `group:"Connection Options" description:"Connection Options"`
 
 	Mode struct {
-		Bruteforce bool `long:"brute" description:"Bruteforce provided user and pass (can be pass spray when only 1 password is specified)"`
-		UserEnum   bool `long:"user-enum" description:"enumerate valid usernames via kerberos"`
+		UserEnum bool `long:"user-enum" description:"enumerate valid usernames via kerberos"`
 	} `group:"Attack Mode"`
 
 	BruteforceStrategy struct {
@@ -36,25 +35,17 @@ type Krb5Options struct {
 	credentials    []utils.Credential
 }
 
+func (o *Krb5Options) getFunction() func(string) {
+	if o.Mode.UserEnum {
+		return o.userenum
+	}
+	return nil
+}
+
 func (o *Krb5Options) Run() error {
 	o.targets = utils.ExtractTargets(o.Targets.TARGETS)
-
-	o.target2SMBInfo = make(map[string]*smb.SMBInfo)
-	var wg sync.WaitGroup
-	var mutex sync.Mutex
-	for _, t := range o.targets {
-		wg.Add(1)
-		go func(s string) {
-			v := getSMBInfo(s)
-			if v != nil {
-				mutex.Lock()
-				o.target2SMBInfo[s] = v
-				mutex.Unlock()
-			}
-			wg.Done()
-		}(t)
-	}
-	wg.Wait()
+	o.target2SMBInfo = gatherSMBInfoToMap(&o.printMutex, o.targets, 88)
+	var f func(string) = o.getFunction()
 
 	if o.BruteforceStrategy.Pitchfork {
 		o.credentials = utils.NewCredentialsPitchFork(
@@ -68,19 +59,17 @@ func (o *Krb5Options) Run() error {
 		)
 	}
 
-	var f func(string)
-	if o.Mode.UserEnum {
-		f = o.userenum
-	} else if o.Mode.Bruteforce {
+	if f == nil {
 		f = o.bruteforce
-	} else {
-		return nil
 	}
 
+	var wg sync.WaitGroup
 	for target := range o.target2SMBInfo {
 		wg.Add(1)
 		go func(t string) {
+			o.printMutex.Lock()
 			f(t)
+			o.printMutex.Unlock()
 			wg.Done()
 		}(target)
 	}
@@ -97,8 +86,6 @@ func (o *Krb5Options) userenum(target string) {
 		return
 	}
 
-	o.printMutex.Lock()
-	defer o.printMutex.Unlock()
 	for _, u := range o.credentials {
 		if tgs, err := client.GetAsReqTgt(u.Username); err != nil {
 			_, ok := err.(*kerberos.ErrorRequiresPreauth)
@@ -124,8 +111,6 @@ func (o *Krb5Options) bruteforce(target string) {
 		return
 	}
 
-	o.printMutex.Lock()
-	defer o.printMutex.Unlock()
 	for _, u := range o.credentials {
 		if ok, _ := client.TestLogin(u.Username, u.Password); ok {
 			prt.PrintSuccess(u.StringWithDomain(o.Connection.Domain))

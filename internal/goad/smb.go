@@ -20,8 +20,10 @@ type SmbOptions struct {
 		Domain   string `short:"d" long:"domain" description:"Provide domain"`
 	} `group:"Connection Options" description:"Connection Options"`
 
-	credentials []utils.Credential
-	targets     []string
+	credentials    []utils.Credential
+	target2SMBInfo map[string]*smb.SMBInfo
+	printMutex     sync.Mutex
+	targets        []string
 }
 
 func getSMBInfo(host string) *smb.SMBInfo {
@@ -34,7 +36,38 @@ func getSMBInfo(host string) *smb.SMBInfo {
 	return data
 }
 
+func gatherSMBInfoToMap(mutex *sync.Mutex, targets []string, port int) map[string]*smb.SMBInfo {
+	ret := make(map[string]*smb.SMBInfo)
+	var wg sync.WaitGroup
+
+	mutex.Lock()
+	defer mutex.Unlock()
+
+	var mapMutex sync.Mutex
+	for _, t := range targets {
+		wg.Add(1)
+		go func(s string) {
+			v := getSMBInfo(s)
+			if v != nil {
+				mapMutex.Lock()
+				ret[s] = v
+				mapMutex.Unlock()
+			}
+			wg.Done()
+		}(t)
+	}
+	wg.Wait()
+	return ret
+}
+
 func (o *SmbOptions) Run() error {
+	o.targets = utils.ExtractTargets(o.Targets.TARGETS)
+	o.target2SMBInfo = gatherSMBInfoToMap(&o.printMutex, o.targets, 445)
+	var f func(string) //= o.getFunction()
+	if f == nil {
+		return nil
+	}
+
 	if o.Connection.NTLM != "" {
 		o.credentials = utils.NewCredentialsNTLM(
 			utils.ExtractLinesFromFileOrString(o.Connection.Username),
@@ -47,13 +80,13 @@ func (o *SmbOptions) Run() error {
 		)
 	}
 
-	o.targets = utils.ExtractTargets(o.Targets.TARGETS)
-
 	var wg sync.WaitGroup
 	for _, t := range o.targets {
 		wg.Add(1)
 		go func(g string) {
-			getSMBInfo(g)
+			o.printMutex.Lock()
+			f(g)
+			o.printMutex.Unlock()
 			wg.Done()
 		}(t)
 	}

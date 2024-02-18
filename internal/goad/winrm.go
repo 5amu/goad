@@ -3,7 +3,6 @@ package goad
 import (
 	"bytes"
 	"context"
-	"fmt"
 	"os"
 	"strings"
 	"sync"
@@ -35,14 +34,27 @@ type WinrmOptions struct {
 	targets        []string
 	target2SMBInfo map[string]*smb.SMBInfo
 	credentials    []utils.Credential
+	printMutex     sync.Mutex
 	cmd            string
+}
+
+func (o *WinrmOptions) getFunction() func(string) {
+	if o.Mode.Exec != "" {
+		o.cmd = o.Mode.Exec
+		return o.exec
+	}
+	if o.Mode.Shell {
+		return o.openShell
+	}
+	return nil
 }
 
 func (o *WinrmOptions) Run() error {
 	o.targets = utils.ExtractTargets(o.Targets.TARGETS)
-	o.target2SMBInfo = make(map[string]*smb.SMBInfo)
-	for _, t := range o.targets {
-		o.target2SMBInfo[t] = getSMBInfo(t)
+	o.target2SMBInfo = gatherSMBInfoToMap(&o.printMutex, o.targets, o.Connection.Port)
+	var f func(string) = o.getFunction()
+	if f == nil {
+		return nil
 	}
 
 	o.credentials = utils.NewCredentialsClusterBomb(
@@ -50,23 +62,11 @@ func (o *WinrmOptions) Run() error {
 		utils.ExtractLinesFromFileOrString(o.Connection.Password),
 	)
 
-	var f func(string) error
-	if o.Mode.Exec != "" {
-		o.cmd = o.Mode.Exec
-		f = o.exec
-	} else if o.Mode.Shell {
-		f = o.openShell
-	} else {
-		return nil
-	}
-
 	var wg sync.WaitGroup
 	for _, target := range o.targets {
 		wg.Add(1)
 		go func(t string) {
-			if err := f(t); err != nil {
-				fmt.Println(err)
-			}
+			f(t)
 			wg.Done()
 		}(target)
 	}
@@ -74,12 +74,11 @@ func (o *WinrmOptions) Run() error {
 	return nil
 }
 
-func (o *WinrmOptions) exec(target string) error {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+func (o *WinrmOptions) exec(target string) {
+	prt := printer.NewPrinter("WINRM", target, o.target2SMBInfo[target].NetBIOSName, o.Connection.Port)
+	defer prt.PrintStored(&o.printMutex)
 
 	var client *winrm.Client
-	prt := printer.NewPrinter("WINRM", target, o.target2SMBInfo[target].NetBIOSName, o.Connection.Port)
 	for _, cred := range o.credentials {
 		var err error
 		params := winrm.DefaultParameters
@@ -91,30 +90,34 @@ func (o *WinrmOptions) exec(target string) error {
 			params,
 		)
 		if err != nil {
-			prt.PrintFailure(cred.StringWithDomain(o.Connection.Domain))
+			prt.StoreFailure(cred.StringWithDomain(o.Connection.Domain))
 			continue
 		} else {
-			prt.PrintSuccess(cred.StringWithDomain(o.Connection.Domain))
+			prt.StoreSuccess(cred.StringWithDomain(o.Connection.Domain))
 			break
 		}
 	}
 
 	var stdoutBuff, stderrBuff bytes.Buffer
-	_, err := client.RunWithContext(ctx, o.cmd, &stdoutBuff, &stderrBuff)
+	_, err := client.RunWithContext(context.Background(), o.cmd, &stdoutBuff, &stderrBuff)
 	if err != nil {
-		return err
+		prt.StoreFailure(err.Error())
+		return
 	}
 	out := stdoutBuff.String() + stderrBuff.String()
 	splitted := strings.Split(out, "\n")
 	for _, s := range splitted[:len(splitted)-1] {
-		prt.Print(s)
+		prt.Store(s)
 	}
-	return nil
 }
 
-func (o *WinrmOptions) openShell(target string) error {
+func (o *WinrmOptions) openShell(target string) {
+	prt := printer.NewPrinter("WINRM", target, o.target2SMBInfo[target].NetBIOSName, o.Connection.Port)
+	defer prt.PrintStored(&o.printMutex)
+
 	if len(o.credentials) != 1 {
-		return fmt.Errorf("provide 1 set of credentials")
+		prt.StoreFailure("provide 1 set of credentials")
+		return
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -134,7 +137,9 @@ func (o *WinrmOptions) openShell(target string) error {
 		}
 
 		_, err = client.RunWithContextWithInput(ctx, "powershell.exe", os.Stdout, os.Stderr, os.Stdin)
-		return err
+		if err != nil {
+			prt.StoreFailure(err.Error())
+			return
+		}
 	}
-	return nil
 }

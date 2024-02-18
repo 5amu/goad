@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"strings"
+	"sync"
 
 	"github.com/fatih/color"
 )
@@ -17,6 +18,7 @@ type Printer struct {
 	netbios string
 	port    int
 	config  *PrinterConfig
+	storage []string
 }
 
 type PrinterConfig struct {
@@ -108,4 +110,61 @@ func (p *Printer) PrintInfo(msg ...string) {
 		color.BlueString("%s ", p.config.SuccessSymbol),
 		msg...,
 	)
+}
+
+func (p *Printer) store(symbol string, msg ...string) {
+	var row strings.Builder
+	row.WriteString(p.config.FirstColumnFormatter("%-8s", p.module))
+	row.WriteString(fmt.Sprintf("%-16s", p.target))
+	row.WriteString(fmt.Sprintf("%-5d", p.port))
+	row.WriteString(fmt.Sprintf("%-16s", p.netbios))
+
+	var message strings.Builder
+	for _, part := range msg {
+		message.WriteString(fmt.Sprintf("%-40s", part))
+		if len(part) > 37 {
+			message.WriteString(fmt.Sprintf("%-3s", ""))
+		}
+	}
+
+	var txt string
+	if symbol != "" {
+		txt = message.String()
+	} else {
+		txt = p.config.OutputFormatter(message.String())
+	}
+	p.storage = append(p.storage, fmt.Sprintf("%s%s%s\n", row.String(), symbol, txt))
+}
+
+func (p *Printer) Store(msg ...string) {
+	p.store("", msg...)
+}
+
+func (p *Printer) StoreFailure(msg ...string) {
+	p.store(
+		p.config.FailureFormatter("%s ", p.config.FailureSymbol),
+		msg...,
+	)
+}
+
+func (p *Printer) StoreInfo(msg ...string) {
+	p.store(
+		color.BlueString("%s ", p.config.SuccessSymbol),
+		msg...,
+	)
+}
+
+func (p *Printer) StoreSuccess(msg ...string) {
+	p.store(
+		p.config.SuccessFormatter("%s ", p.config.SuccessSymbol),
+		msg...,
+	)
+}
+
+func (p *Printer) PrintStored(mutex *sync.Mutex) {
+	mutex.Lock()
+	for _, s := range p.storage {
+		fmt.Fprintf(p.config.Writer, "%s", s)
+	}
+	mutex.Unlock()
 }
