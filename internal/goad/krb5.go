@@ -1,7 +1,6 @@
 package goad
 
 import (
-	"fmt"
 	"sync"
 
 	"github.com/5amu/goad/internal/printer"
@@ -33,11 +32,13 @@ type Krb5Options struct {
 
 	targets        []string
 	target2SMBInfo map[string]*smb.SMBInfo
+	printMutex     sync.Mutex
 	credentials    []utils.Credential
 }
 
 func (o *Krb5Options) Run() error {
 	o.targets = utils.ExtractTargets(o.Targets.TARGETS)
+
 	o.target2SMBInfo = make(map[string]*smb.SMBInfo)
 	var wg sync.WaitGroup
 	var mutex sync.Mutex
@@ -67,7 +68,7 @@ func (o *Krb5Options) Run() error {
 		)
 	}
 
-	var f func(string) error
+	var f func(string)
 	if o.Mode.UserEnum {
 		f = o.userenum
 	} else if o.Mode.Bruteforce {
@@ -79,9 +80,7 @@ func (o *Krb5Options) Run() error {
 	for target := range o.target2SMBInfo {
 		wg.Add(1)
 		go func(t string) {
-			if err := f(t); err != nil {
-				fmt.Println(err)
-			}
+			f(t)
 			wg.Done()
 		}(target)
 	}
@@ -89,13 +88,17 @@ func (o *Krb5Options) Run() error {
 	return nil
 }
 
-func (o *Krb5Options) userenum(target string) error {
+func (o *Krb5Options) userenum(target string) {
+	prt := printer.NewPrinter("KRB5", target, o.target2SMBInfo[target].NetBIOSName, 88)
+
 	client, err := kerberos.NewKerberosClient(o.Connection.Domain, target)
 	if err != nil {
-		return err
+		prt.PrintFailure(err.Error())
+		return
 	}
 
-	prt := printer.NewPrinter("KRB5", target, o.target2SMBInfo[target].NetBIOSName, 88)
+	o.printMutex.Lock()
+	defer o.printMutex.Unlock()
 	for _, u := range o.credentials {
 		if tgs, err := client.GetAsReqTgt(u.Username); err != nil {
 			_, ok := err.(*kerberos.ErrorRequiresPreauth)
@@ -110,16 +113,19 @@ func (o *Krb5Options) userenum(target string) error {
 			prt.Print(hash)
 		}
 	}
-	return nil
 }
 
-func (o *Krb5Options) bruteforce(target string) error {
+func (o *Krb5Options) bruteforce(target string) {
+	prt := printer.NewPrinter("KRB5", target, o.target2SMBInfo[target].NetBIOSName, 88)
+
 	client, err := kerberos.NewKerberosClient(o.Connection.Domain, target)
 	if err != nil {
-		return err
+		prt.PrintFailure(err.Error())
+		return
 	}
 
-	prt := printer.NewPrinter("KRB5", target, o.target2SMBInfo[target].NetBIOSName, 88)
+	o.printMutex.Lock()
+	defer o.printMutex.Unlock()
 	for _, u := range o.credentials {
 		if ok, _ := client.TestLogin(u.Username, u.Password); ok {
 			prt.PrintSuccess(u.StringWithDomain(o.Connection.Domain))
@@ -127,5 +133,4 @@ func (o *Krb5Options) bruteforce(target string) error {
 			prt.PrintFailure(u.StringWithDomain(o.Connection.Domain))
 		}
 	}
-	return nil
 }
