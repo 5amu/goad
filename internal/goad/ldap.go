@@ -160,7 +160,7 @@ func (o *LdapOptions) Run() (err error) {
 	}
 
 	var wg sync.WaitGroup
-	for _, target := range o.targets {
+	for target := range o.target2SMBInfo {
 		wg.Add(1)
 		go func(t string) {
 			if ldap.IsLDAP(t, o.Connection.Port) {

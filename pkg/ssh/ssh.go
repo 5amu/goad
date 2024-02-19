@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/5amu/goad/pkg/utils"
 	zgrab "github.com/zmap/zgrab2/lib/ssh"
 	"golang.org/x/crypto/ssh"
 )
@@ -15,23 +16,27 @@ type Client struct {
 	conn *ssh.Client
 }
 
-func connect(user string, signer ssh.AuthMethod, fullHost string) (*Client, error) {
-	client, err := ssh.Dial("tcp",
-		fullHost,
-		&ssh.ClientConfig{
-			User:            user,
-			Auth:            []ssh.AuthMethod{signer},
-			HostKeyCallback: ssh.InsecureIgnoreHostKey(),
-			Timeout:         3 * time.Second,
-		},
-	)
+func connect(user string, signer ssh.AuthMethod, host string, port int) (*Client, error) {
+	conn, err := utils.GetConnection(host, port)
+	if err != nil {
+		return nil, err
+	}
+	c, ch, req, err := ssh.NewClientConn(conn, fmt.Sprintf("%s:%d", host, port), &ssh.ClientConfig{
+		User:            user,
+		Auth:            []ssh.AuthMethod{signer},
+		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+		Timeout:         3 * time.Second,
+	})
+	if err != nil {
+		return nil, err
+	}
 	return &Client{
-		conn: client,
+		conn: ssh.NewClient(c, ch, req),
 	}, err
 }
 
 func ConnectWithPassword(user, pass string, host string, port int) (*Client, error) {
-	return connect(user, ssh.Password(pass), fmt.Sprintf("%s:%d", host, port))
+	return connect(user, ssh.Password(pass), host, port)
 }
 
 func ConnectWithKey(user, keyPath string, host string, port int) (*Client, error) {
@@ -43,7 +48,7 @@ func ConnectWithKey(user, keyPath string, host string, port int) (*Client, error
 	if err != nil {
 		return nil, err
 	}
-	return connect(user, ssh.PublicKeys(signer), fmt.Sprintf("%s:%d", host, port))
+	return connect(user, ssh.PublicKeys(signer), host, port)
 }
 
 func (c *Client) Run(cmd string, stdout, stderr io.Writer) error {
@@ -109,7 +114,7 @@ func (c *Client) Close() error {
 	return c.conn.Close()
 }
 
-func GrabBanner(rhost string) (string, error) {
+func GrabBanner(host string, port int) (string, error) {
 	data := new(zgrab.HandshakeLog)
 
 	sshConfig := zgrab.MakeSSHConfig()
@@ -121,10 +126,16 @@ func GrabBanner(rhost string) (string, error) {
 		return nil
 	}
 
-	client, err := zgrab.Dial("tcp", rhost, sshConfig)
+	conn, err := utils.GetConnection(host, port)
 	if err != nil {
 		return "", err
 	}
+	c, ch, req, err := zgrab.NewClientConn(conn, fmt.Sprintf("%s:%d", host, port), sshConfig)
+	if err != nil {
+		return "", err
+	}
+
+	client := zgrab.NewClient(c, ch, req)
 	defer client.Close()
 	return data.ServerID.SoftwareVersion, nil
 }

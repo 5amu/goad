@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/5amu/goad/pkg/utils"
 	"github.com/go-ldap/ldap/v3"
 )
 
@@ -44,24 +45,19 @@ func (c *LdapClient) Connect() error {
 		return nil
 	}
 
-	var err error
-	if c.UseSSL {
-		c.Conn, err = ldap.DialTLS("tcp", fmt.Sprintf("%s:%d", c.Host, c.Port), &tls.Config{
-			InsecureSkipVerify: true,
-			ServerName:         c.Host,
-		})
-	} else {
-		c.Conn, err = ldap.Dial("tcp", fmt.Sprintf("%s:%d", c.Host, c.Port))
-	}
+	conn, err := utils.GetConnection(c.Host, c.Port)
 	if err != nil {
-		return err
+		return nil
 	}
+	c.Conn = ldap.NewConn(conn, c.UseSSL)
 
 	if !c.SkipTLS {
 		return c.Conn.StartTLS(&tls.Config{
 			InsecureSkipVerify: true,
 			ServerName:         c.Host,
 		})
+	} else {
+		c.Conn.Start()
 	}
 	return nil
 }

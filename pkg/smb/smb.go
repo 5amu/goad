@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/5amu/goad/pkg/utils"
 	"github.com/praetorian-inc/fingerprintx/pkg/plugins"
 	smbfingerprint "github.com/praetorian-inc/fingerprintx/pkg/plugins/services/smb"
 	zgrabsmb "github.com/zmap/zgrab2/lib/smb/smb"
@@ -34,22 +35,21 @@ func (i *SMBInfo) String() string {
 
 func GatherSMBInfo(host string) (*SMBInfo, error) {
 	var info SMBInfo
-	timeout := 3 * time.Second
 
-	conn, err := net.DialTimeout("tcp", net.JoinHostPort(host, fmt.Sprintf("%d", 445)), timeout)
+	conn, err := utils.GetConnection(host, 445)
 	if err != nil {
 		return nil, err
 	}
 
 	var metadata *plugins.ServiceSMB
-
-	metadata, err = smbfingerprint.DetectSMBv2(conn, timeout*2)
+	metadata, err = smbfingerprint.DetectSMBv2(conn, 5*time.Second)
 	if err != nil {
+		fmt.Println(err)
 		return nil, err
 	}
 	_ = conn.Close()
 
-	conn, err = net.Dial("tcp", fmt.Sprintf("%s:%d", host, 445))
+	conn, err = utils.GetConnection(host, 445)
 	if err != nil {
 		return nil, err
 	}
@@ -57,7 +57,7 @@ func GatherSMBInfo(host string) (*SMBInfo, error) {
 	info.SMBv1Support = err == nil
 	_ = conn.Close()
 
-	conn, err = net.Dial("tcp", fmt.Sprintf("%s:%d", host, 445))
+	conn, err = utils.GetConnection(host, 445)
 	if err != nil {
 		return nil, err
 	}

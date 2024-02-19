@@ -2,11 +2,11 @@ package ldap
 
 import (
 	"fmt"
-	"net"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/5amu/goad/pkg/utils"
 	ldapfingerprint "github.com/praetorian-inc/fingerprintx/pkg/plugins/services/ldap"
 )
 
@@ -61,12 +61,11 @@ func DecodeZuluTimestamp(timestamp string) string {
 }
 
 func IsLDAP(host string, port int) bool {
-	timeout := 2 * time.Second
-	conn, err := net.DialTimeout("tcp", fmt.Sprintf("%s:%d", host, port), timeout)
+	conn, err := utils.GetConnection(host, port)
 	if err != nil {
 		return false
 	}
-	res, err := ldapfingerprint.DetectLDAP(conn, timeout)
+	res, err := ldapfingerprint.DetectLDAP(conn, 2*time.Second)
 	if err != nil {
 		return false
 	}
