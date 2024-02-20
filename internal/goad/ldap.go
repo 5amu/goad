@@ -2,6 +2,7 @@ package goad
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/5amu/goad/internal/printer"
@@ -15,6 +16,11 @@ type LdapOptions struct {
 	Targets struct {
 		TARGETS []string `description:"Provide target IP/FQDN/FILE"`
 	} `positional-args:"yes"`
+
+	CustomQuery struct {
+		SearchFilter string `short:"f" long:"filter" description:"bring your own filter"`
+		Attributes   string `short:"a" long:"attributes" description:"ask your attributes (comma separated)"`
+	}
 
 	Connection struct {
 		Username string `short:"u" description:"Provide username (or FILE)"`
@@ -38,6 +44,7 @@ type LdapOptions struct {
 		AdminCount           bool   `long:"admin-count" description:"Get objets that had the value adminCount=1"`
 		Users                bool   `long:"users" description:"Enumerate enabled domain users"`
 		User                 string `long:"user" description:"Find data about a single user"`
+		Computers            bool   `long:"computers" description:"Enumerate computers in the domain"`
 		ActiveUsers          bool   `long:"active-users" description:"Enumerate active enabled domain users"`
 		Groups               bool   `long:"groups" description:"Enumerate domain groups"`
 		DCList               bool   `long:"dc-list" description:"Enumerate Domain Controllers"`
@@ -59,11 +66,17 @@ type LdapOptions struct {
 	targets        []string
 	target2SMBInfo map[string]*smb.SMBInfo
 	filter         string
+	attributes     []string
 	printMutex     sync.Mutex
 	credentials    []utils.Credential
 }
 
 func (o *LdapOptions) getFunction() func(string) {
+	if o.CustomQuery.SearchFilter != "" && o.CustomQuery.Attributes != "" {
+		o.filter = o.CustomQuery.SearchFilter
+		o.attributes = strings.Split(o.CustomQuery.Attributes, ",")
+		return o.enumeration
+	}
 	if o.Hashes.AsrepRoast != "" {
 		return o.asreproast
 	}
@@ -91,6 +104,10 @@ func (o *LdapOptions) getFunction() func(string) {
 	}
 	if o.Enum.Users {
 		o.filter = ldap.FilterIsUser
+		return o.enumeration
+	}
+	if o.Enum.Computers {
+		o.filter = ldap.FilterIsComputer
 		return o.enumeration
 	}
 	if o.Enum.User != "" {
@@ -341,7 +358,31 @@ func (o *LdapOptions) enumeration(target string) {
 	}
 
 	err = lclient.FindADObjectsWithCallback(o.filter, func(obj ldap.ADObject) error {
-		prt.Store(obj.SAMAccountName, obj.Description)
+		if o.CustomQuery.Attributes == "" {
+			prt.Store(obj.SAMAccountName, obj.Description)
+		} else {
+			var toStore []string
+			attrs := strings.Split(o.CustomQuery.Attributes, ",")
+			for _, attr := range attrs {
+				switch strings.ToLower(attr) {
+				case strings.ToLower(ldap.DistinguishedName):
+					toStore = append(toStore, obj.DistinguishedName)
+				case strings.ToLower(ldap.SAMAccountName):
+					toStore = append(toStore, obj.SAMAccountName)
+				case strings.ToLower(ldap.PasswordLastSet):
+					toStore = append(toStore, obj.PWDLastSet)
+				case strings.ToLower(ldap.LastLogon):
+					toStore = append(toStore, obj.LastLogon)
+				case strings.ToLower(ldap.Description):
+					toStore = append(toStore, obj.Description)
+				case strings.ToLower(ldap.MemberOf):
+					toStore = append(toStore, fmt.Sprint(obj.MemberOf))
+				case strings.ToLower(ldap.ServicePrincipalName):
+					toStore = append(toStore, fmt.Sprint(obj.ServicePrincipalName))
+				}
+			}
+			prt.Store(toStore...)
+		}
 		return err
 	})
 	if err != nil {
