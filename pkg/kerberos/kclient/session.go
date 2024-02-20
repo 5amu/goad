@@ -128,17 +128,6 @@ func (s *session) destroy() {
 	s.sessionKeyExpiration = s.endTime
 }
 
-// valid informs if the TGT is still within the valid time window
-func (s *session) valid() bool {
-	s.mux.RLock()
-	defer s.mux.RUnlock()
-	t := time.Now().UTC()
-	if t.Before(s.endTime) && s.authTime.Before(t) {
-		return true
-	}
-	return false
-}
-
 // tgtDetails is a thread safe way to get the session's realm, TGT and session key values
 func (s *session) tgtDetails() (string, messages.Ticket, types.EncryptionKey) {
 	s.mux.RLock()

@@ -202,7 +202,7 @@ func sendTCP(conn *net.TCPConn, b []byte) ([]byte, error) {
 	defer conn.Close()
 	var r []byte
 	// RFC 4120 7.2.2 specifies the first 4 bytes indicate the length of the message in big endian order.
-	hb := make([]byte, 4, 4)
+	hb := make([]byte, 4)
 	binary.BigEndian.PutUint32(hb, uint32(len(b)))
 	b = append(hb, b...)
 
@@ -211,14 +211,14 @@ func sendTCP(conn *net.TCPConn, b []byte) ([]byte, error) {
 		return r, fmt.Errorf("error sending to KDC (%s): %v", conn.RemoteAddr().String(), err)
 	}
 
-	sh := make([]byte, 4, 4)
+	sh := make([]byte, 4)
 	_, err = conn.Read(sh)
 	if err != nil {
 		return r, fmt.Errorf("error reading response size header: %v", err)
 	}
 	s := binary.BigEndian.Uint32(sh)
 
-	rb := make([]byte, s, s)
+	rb := make([]byte, s)
 	_, err = io.ReadFull(conn, rb)
 	if err != nil {
 		return r, fmt.Errorf("error reading response: %v", err)
