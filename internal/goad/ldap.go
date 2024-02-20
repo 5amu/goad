@@ -341,11 +341,13 @@ func (o *LdapOptions) kerberoast(target string) {
 		return
 	}
 
+	if len(hashes) == 0 {
+		return
+	}
 	prt.Store("Saving hashes to", o.Hashes.Kerberoast)
 	err = utils.WriteLines(hashes, o.Hashes.Kerberoast)
 	if err != nil {
 		prt.StoreFailure(err.Error())
-		return
 	}
 }
 
