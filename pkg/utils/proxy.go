@@ -10,10 +10,18 @@ import (
 
 var DefaultTimeout = 3 * time.Second
 
-func GetConnection(host string, port int) (net.Conn, error) {
+func getConnection(network string, host string, port int) (net.Conn, error) {
 	pd := proxy.FromEnvironment()
 	if pd != nil {
-		return pd.Dial("tcp", fmt.Sprintf("%s:%d", host, port))
+		return pd.Dial(network, fmt.Sprintf("%s:%d", host, port))
 	}
-	return net.DialTimeout("tcp", fmt.Sprintf("%s:%d", host, port), DefaultTimeout)
+	return net.DialTimeout(network, fmt.Sprintf("%s:%d", host, port), DefaultTimeout)
+}
+
+func GetConnection(host string, port int) (net.Conn, error) {
+	return getConnection("tcp", host, port)
+}
+
+func GetConnectionUDP(host string, port int) (net.Conn, error) {
+	return getConnection("udp", host, port)
 }

@@ -1,27 +1,23 @@
-package kerberos
-
-/*
-This code is adapted from the original library, more precisely here:
-https://github.com/jcmturner/gokrb5/blob/855dbc707a37a21467aef6c0245fcf3328dc39ed/v8/client/network.go
-Thank you mister @jcmturner
-*/
+package kclient
 
 import (
 	"encoding/binary"
 	"fmt"
 	"io"
 	"net"
+	"strconv"
 	"strings"
 	"time"
 
-	"github.com/jcmturner/gokrb5/iana/errorcode"
+	"github.com/5amu/goad/pkg/utils"
+	"github.com/jcmturner/gokrb5/v8/iana/errorcode"
 	"github.com/jcmturner/gokrb5/v8/messages"
 )
 
 // SendToKDC performs network actions to send data to the KDC.
-func (cl *KerberosClient) sendToKDC(b []byte, realm string) ([]byte, error) {
+func (cl *Client) SendToKDC(b []byte, realm string) ([]byte, error) {
 	var rb []byte
-	if cl.client.Config.LibDefaults.UDPPreferenceLimit == 1 {
+	if cl.Config.LibDefaults.UDPPreferenceLimit == 1 {
 		//1 means we should always use TCP
 		rb, errtcp := cl.sendKDCTCP(realm, b)
 		if errtcp != nil {
@@ -32,9 +28,9 @@ func (cl *KerberosClient) sendToKDC(b []byte, realm string) ([]byte, error) {
 		}
 		return rb, nil
 	}
-	if len(b) <= cl.client.Config.LibDefaults.UDPPreferenceLimit {
+	if len(b) <= cl.Config.LibDefaults.UDPPreferenceLimit {
 		//Try UDP first, TCP second
-		rb, errudp := cl.sendKDCUDP(realm, b)
+		rb, errudp := cl.SendKDCUDP(realm, b)
 		if errudp != nil {
 			if e, ok := errudp.(messages.KRBError); ok && e.ErrorCode != errorcode.KRB_ERR_RESPONSE_TOO_BIG {
 				// Got a KRBError from KDC
@@ -61,7 +57,7 @@ func (cl *KerberosClient) sendToKDC(b []byte, realm string) ([]byte, error) {
 			// Got a KRBError from KDC so returning and not trying UDP.
 			return rb, e
 		}
-		rb, errudp := cl.sendKDCUDP(realm, b)
+		rb, errudp := cl.SendKDCUDP(realm, b)
 		if errudp != nil {
 			if e, ok := errudp.(messages.KRBError); ok {
 				// Got a KRBError
@@ -73,10 +69,10 @@ func (cl *KerberosClient) sendToKDC(b []byte, realm string) ([]byte, error) {
 	return rb, nil
 }
 
-// sendKDCUDP sends bytes to the KDC via UDP.
-func (cl *KerberosClient) sendKDCUDP(realm string, b []byte) ([]byte, error) {
+// SendKDCUDP sends bytes to the KDC via UDP.
+func (cl *Client) SendKDCUDP(realm string, b []byte) ([]byte, error) {
 	var r []byte
-	_, kdcs, err := cl.client.Config.GetKDCs(realm, false)
+	_, kdcs, err := cl.Config.GetKDCs(realm, false)
 	if err != nil {
 		return r, err
 	}
@@ -91,9 +87,25 @@ func (cl *KerberosClient) sendKDCUDP(realm string, b []byte) ([]byte, error) {
 func dialSendUDP(kdcs map[int]string, b []byte) ([]byte, error) {
 	var errs []string
 	for i := 1; i <= len(kdcs); i++ {
-		conn, err := net.DialTimeout("udp", kdcs[i], 5*time.Second)
+		udpAddr, err := net.ResolveUDPAddr("udp", kdcs[i])
 		if err != nil {
-			errs = append(errs, fmt.Sprintf("error establishing connection to %s: %v", kdcs[i], err))
+			errs = append(errs, fmt.Sprintf("error resolving KDC address: %v", err))
+			continue
+		}
+
+		host, portS, err := net.SplitHostPort(udpAddr.String())
+		if err != nil {
+			return nil, err
+		}
+
+		port, err := strconv.Atoi(portS)
+		if err != nil {
+			return nil, err
+		}
+
+		conn, err := utils.GetConnectionUDP(host, port)
+		if err != nil {
+			errs = append(errs, fmt.Sprintf("error setting dial timeout on connection to %s: %v", kdcs[i], err))
 			continue
 		}
 		if err := conn.SetDeadline(time.Now().Add(5 * time.Second)); err != nil {
@@ -132,9 +144,9 @@ func sendUDP(conn *net.UDPConn, b []byte) ([]byte, error) {
 }
 
 // sendKDCTCP sends bytes to the KDC via TCP.
-func (cl *KerberosClient) sendKDCTCP(realm string, b []byte) ([]byte, error) {
+func (cl *Client) sendKDCTCP(realm string, b []byte) ([]byte, error) {
 	var r []byte
-	_, kdcs, err := cl.client.Config.GetKDCs(realm, true)
+	_, kdcs, err := cl.Config.GetKDCs(realm, true)
 	if err != nil {
 		return r, err
 	}
@@ -149,9 +161,25 @@ func (cl *KerberosClient) sendKDCTCP(realm string, b []byte) ([]byte, error) {
 func dialSendTCP(kdcs map[int]string, b []byte) ([]byte, error) {
 	var errs []string
 	for i := 1; i <= len(kdcs); i++ {
-		conn, err := net.DialTimeout("tcp", kdcs[i], 5*time.Second)
+		tcpAddr, err := net.ResolveTCPAddr("tcp", kdcs[i])
 		if err != nil {
-			errs = append(errs, fmt.Sprintf("error establishing connection to %s: %v", kdcs[i], err))
+			errs = append(errs, fmt.Sprintf("error resolving KDC address: %v", err))
+			continue
+		}
+
+		host, portS, err := net.SplitHostPort(tcpAddr.String())
+		if err != nil {
+			return nil, err
+		}
+
+		port, err := strconv.Atoi(portS)
+		if err != nil {
+			return nil, err
+		}
+
+		conn, err := utils.GetConnection(host, port)
+		if err != nil {
+			errs = append(errs, fmt.Sprintf("error setting dial timeout on connection to %s: %v", kdcs[i], err))
 			continue
 		}
 		if err := conn.SetDeadline(time.Now().Add(5 * time.Second)); err != nil {
@@ -174,7 +202,7 @@ func sendTCP(conn *net.TCPConn, b []byte) ([]byte, error) {
 	defer conn.Close()
 	var r []byte
 	// RFC 4120 7.2.2 specifies the first 4 bytes indicate the length of the message in big endian order.
-	hb := make([]byte, 4)
+	hb := make([]byte, 4, 4)
 	binary.BigEndian.PutUint32(hb, uint32(len(b)))
 	b = append(hb, b...)
 
@@ -183,14 +211,14 @@ func sendTCP(conn *net.TCPConn, b []byte) ([]byte, error) {
 		return r, fmt.Errorf("error sending to KDC (%s): %v", conn.RemoteAddr().String(), err)
 	}
 
-	sh := make([]byte, 4)
+	sh := make([]byte, 4, 4)
 	_, err = conn.Read(sh)
 	if err != nil {
 		return r, fmt.Errorf("error reading response size header: %v", err)
 	}
 	s := binary.BigEndian.Uint32(sh)
 
-	rb := make([]byte, s)
+	rb := make([]byte, s, s)
 	_, err = io.ReadFull(conn, rb)
 	if err != nil {
 		return r, fmt.Errorf("error reading response: %v", err)

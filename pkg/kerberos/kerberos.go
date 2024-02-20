@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	kclient "github.com/jcmturner/gokrb5/v8/client"
+	"github.com/5amu/goad/pkg/kerberos/kclient"
 	kconfig "github.com/jcmturner/gokrb5/v8/config"
 	"github.com/jcmturner/gokrb5/v8/iana/errorcode"
 	"github.com/jcmturner/gokrb5/v8/keytab"
@@ -110,7 +110,7 @@ func (c *KerberosClient) GetAsReqTgt(username string) (*AsRepTGT, error) {
 		return nil, err
 	}
 
-	rb, err := c.sendToKDC(b, c.Realm)
+	rb, err := c.client.SendToKDC(b, c.Realm)
 	if err != nil {
 		e, ok := err.(messages.KRBError)
 		if !ok {
