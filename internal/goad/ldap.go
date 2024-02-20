@@ -196,22 +196,27 @@ func (o *LdapOptions) testCredentials(target string) {
 	prt := printer.NewPrinter("LDAP", lclient.Host, o.target2SMBInfo[lclient.Host].NetBIOSName, lclient.Port)
 	defer prt.PrintStored(&o.printMutex)
 
+	var valid bool = false
 	for _, creds := range o.credentials {
 		if creds.Hash != "" {
 			if err := lclient.AuthenticateNTLM(creds.Username, creds.Hash); err != nil {
 				prt.StoreFailure(creds.StringWithDomain(o.Connection.Domain))
 			} else {
+				valid = true
 				prt.StoreSuccess(creds.StringWithDomain(o.Connection.Domain))
 			}
 		} else {
 			if err := lclient.Authenticate(creds.Username, creds.Password); err != nil {
 				prt.StoreFailure(creds.StringWithDomain(o.Connection.Domain))
 			} else {
+				valid = true
 				prt.StoreSuccess(creds.StringWithDomain(o.Connection.Domain))
 			}
 		}
 	}
-	prt.StoreFailure("no valid authentication")
+	if !valid {
+		prt.StoreFailure("no valid authentication")
+	}
 }
 
 func (o *LdapOptions) authenticate(ldapClient *ldap.LdapClient) (utils.Credential, error) {
