@@ -23,7 +23,6 @@ type WinrmOptions struct {
 		SSL      bool   `long:"ssl" description:"Encrypt Winrm connection"`
 		Username string `short:"u" description:"Provide username (or FILE)"`
 		Password string `short:"p" description:"Provide password (or FILE)"`
-		Domain   string `short:"d" long:"domain" description:"Provide domain"`
 	} `group:"Connection Options" description:"Connection Options"`
 
 	Mode struct {
@@ -90,10 +89,10 @@ func (o *WinrmOptions) exec(target string) {
 			params,
 		)
 		if err != nil {
-			prt.StoreFailure(cred.StringWithDomain(o.Connection.Domain))
+			prt.StoreFailure(cred.String())
 			continue
 		} else {
-			prt.StoreSuccess(cred.StringWithDomain(o.Connection.Domain))
+			prt.StoreSuccess(cred.String())
 			break
 		}
 	}
