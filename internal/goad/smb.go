@@ -28,8 +28,8 @@ type SmbOptions struct {
 
 func getSMBInfo(host string) *smb.SMBInfo {
 	data, err := smb.GatherSMBInfo(host)
-	if err != nil {
-		return data
+	if data == nil || err != nil {
+		return nil
 	}
 	prt := printer.NewPrinter("SMB", host, data.NetBIOSName, 445)
 	prt.PrintInfo(data.String())
@@ -44,10 +44,13 @@ func gatherSMBInfoToMap(mutex *sync.Mutex, targets []string, port int) map[strin
 	defer mutex.Unlock()
 
 	var mapMutex sync.Mutex
+	guard := make(chan struct{}, utils.DefaultMaxConcurrent)
 	for _, t := range targets {
 		wg.Add(1)
+		guard <- struct{}{}
 		go func(s string) {
 			v := getSMBInfo(s)
+			<-guard
 			if v != nil {
 				mapMutex.Lock()
 				ret[s] = v

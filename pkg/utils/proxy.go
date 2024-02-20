@@ -13,9 +13,17 @@ var DefaultTimeout = 3 * time.Second
 func getConnection(network string, host string, port int) (net.Conn, error) {
 	pd := proxy.FromEnvironment()
 	if pd != nil {
-		return pd.Dial(network, fmt.Sprintf("%s:%d", host, port))
+		conn, err := pd.Dial(network, fmt.Sprintf("%s:%d", host, port))
+		if err != nil {
+			return nil, err
+		}
+		return conn, conn.SetDeadline(time.Now().Add(2 * time.Second))
 	}
-	return net.DialTimeout(network, fmt.Sprintf("%s:%d", host, port), DefaultTimeout)
+	conn, err := net.DialTimeout(network, fmt.Sprintf("%s:%d", host, port), 2*time.Second)
+	if err != nil {
+		return nil, err
+	}
+	return conn, conn.SetDeadline(time.Now().Add(2 * time.Second))
 }
 
 func GetConnection(host string, port int) (net.Conn, error) {

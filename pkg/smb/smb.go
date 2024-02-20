@@ -2,7 +2,6 @@ package smb
 
 import (
 	"fmt"
-	"net"
 	"strings"
 	"time"
 
@@ -33,58 +32,63 @@ func (i *SMBInfo) String() string {
 	)
 }
 
-func GatherSMBInfo(host string) (*SMBInfo, error) {
-	var info SMBInfo
-
+func getMetadata(host string) (*plugins.ServiceSMB, error) {
 	conn, err := utils.GetConnection(host, 445)
 	if err != nil {
 		return nil, err
 	}
+	defer conn.Close()
+	return smbfingerprint.DetectSMBv2(conn, 1*time.Second)
+}
+
+func GatherSMBInfo(host string) (*SMBInfo, error) {
+	var info SMBInfo
+	var err error
 
 	var metadata *plugins.ServiceSMB
-	metadata, err = smbfingerprint.DetectSMBv2(conn, 5*time.Second)
-	if err != nil {
-		fmt.Println(err)
-		return nil, err
-	}
-	_ = conn.Close()
+	mch := make(chan *plugins.ServiceSMB)
+	go func() {
+		if m, err := getMetadata(host); err == nil {
+			mch <- m
+		}
+	}()
 
-	conn, err = utils.GetConnection(host, 445)
-	if err != nil {
-		return nil, err
+	select {
+	case metadata = <-mch:
+	case <-time.After(time.Second):
+		return nil, fmt.Errorf("timeout smb metadata")
 	}
-	_, err = getSMBInfo(conn, true, true)
-	info.SMBv1Support = err == nil
-	_ = conn.Close()
 
-	conn, err = utils.GetConnection(host, 445)
-	if err != nil {
-		return nil, err
+	if metadata == nil {
+		return nil, fmt.Errorf("invalid smb metadata")
 	}
-	data, err := getSMBInfo(conn, true, false)
+	info.WindowsVersion = metadata.OSVersion
+	info.NetBIOSName = metadata.NetBIOSComputerName
+	info.Domain = metadata.DNSDomainName
+	info.DNSComputerName = strings.ToLower(metadata.DNSComputerName)
+
+	var data *zgrabsmb.SMBLog
+	if data, err = getSMBInfo(host, true, true); err != nil {
+		if data, err = getSMBInfo(host, true, false); err != nil {
+			fmt.Println(err)
+			return nil, err
+		}
+	}
+
+	if data != nil {
+		info.SigningRequired = data.NegotiationLog.SecurityMode&zgrabsmb.SecurityModeSigningRequired > 0
+	}
+	return &info, nil
+}
+
+func getSMBInfo(host string, setupSession, v1 bool) (*zgrabsmb.SMBLog, error) {
+	conn, err := utils.GetConnection(host, 445)
 	if err != nil {
 		return nil, err
 	}
 	defer conn.Close()
 
-	if data != nil {
-		info.SigningRequired = data.NegotiationLog.SecurityMode&zgrabsmb.SecurityModeSigningRequired > 0
-	}
-
-	if metadata != nil {
-		info.WindowsVersion = metadata.OSVersion
-		info.NetBIOSName = metadata.NetBIOSComputerName
-		info.Domain = metadata.DNSDomainName
-		info.DNSComputerName = strings.ToLower(metadata.DNSComputerName)
-	}
-	return &info, nil
-}
-
-func getSMBInfo(conn net.Conn, setupSession, v1 bool) (*zgrabsmb.SMBLog, error) {
-	_ = conn.SetDeadline(time.Now().Add(3 * time.Second))
-	defer func() {
-		_ = conn.SetDeadline(time.Time{})
-	}()
+	_ = conn.SetDeadline(time.Now().Add(1 * time.Second))
 
 	result, err := zgrabsmb.GetSMBLog(conn, setupSession, v1, false)
 	if err != nil {

@@ -6,6 +6,8 @@ import (
 	"os"
 )
 
+const DefaultMaxConcurrent = 60
+
 func ExtractLinesFromFileOrString(s string) (o []string) {
 	var err error
 	if o, err = readLines(s); err != nil {
