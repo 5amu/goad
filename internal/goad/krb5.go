@@ -62,9 +62,7 @@ func (o *Krb5Options) Run() error {
 	for target := range o.target2SMBInfo {
 		wg.Add(1)
 		go func(t string) {
-			o.printMutex.Lock()
 			f(t)
-			o.printMutex.Unlock()
 			wg.Done()
 		}(target)
 	}
@@ -74,10 +72,11 @@ func (o *Krb5Options) Run() error {
 
 func (o *Krb5Options) userenum(target string) {
 	prt := printer.NewPrinter("KRB5", target, o.target2SMBInfo[target].NetBIOSName, 88)
+	defer prt.PrintStored(&o.printMutex)
 
 	client, err := kerberos.NewKerberosClient(o.Connection.Domain, target)
 	if err != nil {
-		prt.PrintFailure(err.Error())
+		prt.StoreFailure(err.Error())
 		return
 	}
 
@@ -85,32 +84,33 @@ func (o *Krb5Options) userenum(target string) {
 		if tgs, err := client.GetAsReqTgt(u.Username); err != nil {
 			_, ok := err.(*kerberos.ErrorRequiresPreauth)
 			if ok {
-				prt.PrintSuccess(u.StringWithDomain(o.Connection.Domain), "Requires Preauth")
+				prt.StoreSuccess(u.StringWithDomain(o.Connection.Domain), "Requires Preauth")
 			} else {
-				prt.PrintFailure(u.StringWithDomain(o.Connection.Domain), "Does Not Exist")
+				prt.StoreFailure(u.StringWithDomain(o.Connection.Domain), "Does Not Exist")
 			}
 		} else {
 			hash := tgs.Hash
-			prt.PrintSuccess(u.StringWithDomain(o.Connection.Domain), "No Preauth")
-			prt.Print(hash)
+			prt.StoreSuccess(u.StringWithDomain(o.Connection.Domain), "No Preauth")
+			prt.Store(hash)
 		}
 	}
 }
 
 func (o *Krb5Options) bruteforce(target string) {
 	prt := printer.NewPrinter("KRB5", target, o.target2SMBInfo[target].NetBIOSName, 88)
+	defer prt.PrintStored(&o.printMutex)
 
 	client, err := kerberos.NewKerberosClient(o.Connection.Domain, target)
 	if err != nil {
-		prt.PrintFailure(err.Error())
+		prt.StoreFailure(err.Error())
 		return
 	}
 
 	for _, u := range o.credentials {
 		if ok, _ := client.TestLogin(u.Username, u.Password); ok {
-			prt.PrintSuccess(u.StringWithDomain(o.Connection.Domain))
+			prt.StoreSuccess(u.StringWithDomain(o.Connection.Domain))
 		} else {
-			prt.PrintFailure(u.StringWithDomain(o.Connection.Domain))
+			prt.StoreFailure(u.StringWithDomain(o.Connection.Domain))
 		}
 	}
 }
