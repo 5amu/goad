@@ -73,12 +73,14 @@ func (o *SmbOptions) testCredentials(target string) {
 			if err := client.AuthenticateWithHash(creds.Username, creds.Hash); err != nil {
 				prt.StoreFailure(creds.StringWithDomain(o.Connection.Domain))
 			} else {
+				valid = true
 				prt.StoreSuccess(creds.StringWithDomain(o.Connection.Domain))
 			}
 		} else {
 			if err := client.Authenticate(creds.Username, creds.Password); err != nil {
 				prt.StoreFailure(creds.StringWithDomain(o.Connection.Domain))
 			} else {
+				valid = true
 				prt.StoreSuccess(creds.StringWithDomain(o.Connection.Domain))
 			}
 		}
