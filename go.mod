@@ -6,6 +6,7 @@ require (
 	github.com/5amu/go-flags v0.0.0-20240129164246-3942f39c22b8
 	github.com/fatih/color v1.16.0
 	github.com/go-ldap/ldap/v3 v3.4.6
+	github.com/hirochachacha/go-smb2 v1.1.0
 	github.com/jcmturner/gokrb5/v8 v8.4.4
 	github.com/masterzen/winrm v0.0.0-20231227165926-e811dad5ac77
 )
@@ -13,7 +14,6 @@ require (
 require (
 	github.com/docker/go-units v0.5.0 // indirect
 	github.com/geoffgarside/ber v1.1.0 // indirect
-	github.com/hirochachacha/go-smb2 v1.1.0 // indirect
 )
 
 require (

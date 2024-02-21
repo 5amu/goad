@@ -201,7 +201,7 @@ func (c *Client) ListShares() ([]Share, error) {
 		writable = !os.IsPermission(err)
 		if writable {
 			// cleanup
-			fs.Remove("goadtest.txt")
+			_ = fs.Remove("goadtest.txt")
 		}
 
 		_ = fs.Umount()
