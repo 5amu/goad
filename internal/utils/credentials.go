@@ -47,3 +47,20 @@ func (c *Credential) StringWithDomain(domain string) string {
 	}
 	return fmt.Sprintf("%s\\%s:%s", domain, c.Username, c.Password)
 }
+
+type Strategy int
+
+const (
+	Clusterbomb Strategy = iota
+	Pitchfork
+)
+
+func NewCredentialsDispacher(users, passwords, ntlm string, strategy Strategy) []Credential {
+	if ntlm != "" {
+		return NewCredentialsNTLM(ExtractLinesFromFileOrString(users), ntlm)
+	}
+	if strategy == Pitchfork {
+		return NewCredentialsPitchFork(ExtractLinesFromFileOrString(users), ExtractLinesFromFileOrString(passwords))
+	}
+	return NewCredentialsClusterBomb(ExtractLinesFromFileOrString(users), ExtractLinesFromFileOrString(passwords))
+}

@@ -51,15 +51,17 @@ func (o *WinrmOptions) getFunction() func(string) {
 
 func (o *WinrmOptions) Run() error {
 	o.targets = utils.ExtractTargets(o.Targets.TARGETS)
-	o.target2SMBInfo = gatherSMBInfoToMap(&o.printMutex, o.targets, o.Connection.Port)
+	o.target2SMBInfo = utils.GatherSMBInfoToMap(&o.printMutex, o.targets, o.Connection.Port)
 	var f func(string) = o.getFunction()
 	if f == nil {
 		return nil
 	}
 
-	o.credentials = utils.NewCredentialsClusterBomb(
-		utils.ExtractLinesFromFileOrString(o.Connection.Username),
-		utils.ExtractLinesFromFileOrString(o.Connection.Password),
+	o.credentials = utils.NewCredentialsDispacher(
+		o.Connection.Username,
+		o.Connection.Password,
+		"",
+		utils.Clusterbomb,
 	)
 
 	var wg sync.WaitGroup

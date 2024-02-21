@@ -39,29 +39,24 @@ func (o *Krb5Options) getFunction() func(string) {
 	if o.Mode.UserEnum {
 		return o.userenum
 	}
-	return nil
+	return o.bruteforce
 }
 
 func (o *Krb5Options) Run() error {
 	o.targets = utils.ExtractTargets(o.Targets.TARGETS)
-	o.target2SMBInfo = gatherSMBInfoToMap(&o.printMutex, o.targets, 88)
+	o.target2SMBInfo = utils.GatherSMBInfoToMap(&o.printMutex, o.targets, 88)
 	var f func(string) = o.getFunction()
 
+	var strategy utils.Strategy = utils.Clusterbomb
 	if o.BruteforceStrategy.Pitchfork {
-		o.credentials = utils.NewCredentialsPitchFork(
-			utils.ExtractLinesFromFileOrString(o.Connection.Username),
-			utils.ExtractLinesFromFileOrString(o.Connection.Password),
-		)
-	} else {
-		o.credentials = utils.NewCredentialsClusterBomb(
-			utils.ExtractLinesFromFileOrString(o.Connection.Username),
-			utils.ExtractLinesFromFileOrString(o.Connection.Password),
-		)
+		strategy = utils.Pitchfork
 	}
-
-	if f == nil {
-		f = o.bruteforce
-	}
+	o.credentials = utils.NewCredentialsDispacher(
+		o.Connection.Username,
+		o.Connection.Password,
+		"",
+		strategy,
+	)
 
 	var wg sync.WaitGroup
 	for target := range o.target2SMBInfo {

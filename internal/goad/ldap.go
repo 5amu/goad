@@ -152,29 +152,20 @@ func (o *LdapOptions) getFunction() func(string) {
 		)
 		return o.enumeration
 	}
-	return nil
+	return o.testCredentials
 }
 
 func (o *LdapOptions) Run() (err error) {
 	o.targets = utils.ExtractTargets(o.Targets.TARGETS)
-	o.target2SMBInfo = gatherSMBInfoToMap(&o.printMutex, o.targets, o.Connection.Port)
+	o.target2SMBInfo = utils.GatherSMBInfoToMap(&o.printMutex, o.targets, o.Connection.Port)
 	var f func(string) = o.getFunction()
 
-	if o.Connection.NTLM != "" {
-		o.credentials = utils.NewCredentialsNTLM(
-			utils.ExtractLinesFromFileOrString(o.Connection.Username),
-			o.Connection.NTLM,
-		)
-	} else {
-		o.credentials = utils.NewCredentialsClusterBomb(
-			utils.ExtractLinesFromFileOrString(o.Connection.Username),
-			utils.ExtractLinesFromFileOrString(o.Connection.Password),
-		)
-	}
-
-	if f == nil {
-		f = o.testCredentials
-	}
+	o.credentials = utils.NewCredentialsDispacher(
+		o.Connection.Username,
+		o.Connection.Password,
+		o.Connection.NTLM,
+		utils.Clusterbomb,
+	)
 
 	var wg sync.WaitGroup
 	for target := range o.target2SMBInfo {
