@@ -10,6 +10,14 @@ import (
 
 var DefaultTimeout = 3 * time.Second
 
+func GetDialer() func(network, addr string) (net.Conn, error) {
+	pd := proxy.FromEnvironment()
+	if pd != nil {
+		return pd.Dial
+	}
+	return net.Dial
+}
+
 func getConnection(network string, host string, port int) (net.Conn, error) {
 	pd := proxy.FromEnvironment()
 	if pd != nil {

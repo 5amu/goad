@@ -10,6 +10,7 @@ import (
 	"github.com/5amu/goad/internal/printer"
 	"github.com/5amu/goad/internal/utils"
 	"github.com/5amu/goad/pkg/smb"
+	putils "github.com/5amu/goad/pkg/utils"
 	"github.com/masterzen/winrm"
 )
 
@@ -81,7 +82,8 @@ func (o *WinrmOptions) exec(target string) {
 	for _, cred := range o.credentials {
 		var err error
 		params := winrm.DefaultParameters
-		params.TransportDecorator = func() winrm.Transporter { return &winrm.ClientNTLM{} }
+
+		params.TransportDecorator = func() winrm.Transporter { return winrm.NewClientNTLMWithDial(putils.GetDialer()) }
 		client, err = winrm.NewClientWithParameters(
 			winrm.NewEndpoint(target, o.Connection.Port, o.Connection.SSL, true, nil, nil, nil, 0),
 			cred.Username,
@@ -124,7 +126,7 @@ func (o *WinrmOptions) openShell(target string) {
 
 	for _, cred := range o.credentials {
 		params := winrm.DefaultParameters
-		params.TransportDecorator = func() winrm.Transporter { return &winrm.ClientNTLM{} }
+		params.TransportDecorator = func() winrm.Transporter { return winrm.NewClientNTLMWithDial(putils.GetDialer()) }
 		client, err := winrm.NewClientWithParameters(
 			winrm.NewEndpoint(target, o.Connection.Port, o.Connection.SSL, true, nil, nil, nil, 0),
 			cred.Username,
