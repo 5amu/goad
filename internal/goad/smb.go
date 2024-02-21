@@ -8,6 +8,7 @@ import (
 	"github.com/5amu/goad/internal/printer"
 	"github.com/5amu/goad/internal/utils"
 	"github.com/5amu/goad/pkg/smb"
+	"github.com/fatih/color"
 )
 
 type SmbOptions struct {
@@ -74,14 +75,22 @@ func (o *SmbOptions) testCredentials(target string) {
 				prt.StoreFailure(creds.StringWithDomain(o.Connection.Domain))
 			} else {
 				valid = true
-				prt.StoreSuccess(creds.StringWithDomain(o.Connection.Domain))
+				if client.AdminShareWritable() {
+					prt.StoreSuccess(creds.StringWithDomain(o.Connection.Domain) + color.YellowString(" (Pwn3d!)"))
+				} else {
+					prt.StoreSuccess(creds.StringWithDomain(o.Connection.Domain))
+				}
 			}
 		} else {
 			if err := client.Authenticate(creds.Username, creds.Password); err != nil {
 				prt.StoreFailure(creds.StringWithDomain(o.Connection.Domain))
 			} else {
 				valid = true
-				prt.StoreSuccess(creds.StringWithDomain(o.Connection.Domain))
+				if client.AdminShareWritable() {
+					prt.StoreSuccess(creds.StringWithDomain(o.Connection.Domain) + color.YellowString(" (Pwn3d!)"))
+				} else {
+					prt.StoreSuccess(creds.StringWithDomain(o.Connection.Domain))
+				}
 			}
 		}
 	}
@@ -99,14 +108,22 @@ func (o *SmbOptions) authenticate(client *smb.Client) (utils.Credential, error) 
 			if err := client.AuthenticateWithHash(creds.Username, creds.Hash); err != nil {
 				prt.StoreFailure(creds.StringWithDomain(o.Connection.Domain))
 			} else {
-				prt.StoreSuccess(creds.StringWithDomain(o.Connection.Domain))
+				if client.AdminShareWritable() {
+					prt.StoreSuccess(creds.StringWithDomain(o.Connection.Domain) + color.YellowString(" (Pwn3d!)"))
+				} else {
+					prt.StoreSuccess(creds.StringWithDomain(o.Connection.Domain))
+				}
 				return creds, nil
 			}
 		} else {
 			if err := client.Authenticate(creds.Username, creds.Password); err != nil {
 				prt.StoreFailure(creds.StringWithDomain(o.Connection.Domain))
 			} else {
-				prt.StoreSuccess(creds.StringWithDomain(o.Connection.Domain))
+				if client.AdminShareWritable() {
+					prt.StoreSuccess(creds.StringWithDomain(o.Connection.Domain) + color.YellowString(" (Pwn3d!)"))
+				} else {
+					prt.StoreSuccess(creds.StringWithDomain(o.Connection.Domain))
+				}
 				return creds, nil
 			}
 		}

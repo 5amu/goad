@@ -214,3 +214,18 @@ func (c *Client) ListShares() ([]Share, error) {
 	}
 	return res, nil
 }
+
+func (c *Client) AdminShareWritable() bool {
+	fs, err := c.session.Mount("ADMIN$")
+	if err != nil {
+		return false
+	}
+	defer fs.Umount()
+
+	err = fs.WriteFile("goadtest.txt", []byte("test"), 0444)
+	if !os.IsPermission(err) {
+		// cleanup
+		_ = fs.Remove("goadtest.txt")
+	}
+	return !os.IsPermission(err)
+}
