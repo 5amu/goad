@@ -40,12 +40,8 @@ goad -h
 
 # See options for subcommands
 goad ldap -h
+
+# To use it with a proxy (eg:socks5)
+export ALL_PROXY="socks5://127.0.0.1:1080"
+goad smb 10.0.0.0/24 # every command will work without any other config
 ```
-
-## Caveats
-
-<details>
-    <summary>Pivoting</summary>
-    Support for proxies is not in the scope of the project, but being a Go program it is suggested to use <a href="https://github.com/hmgle/graftcp">https://github.com/hmgle/graftcp</a>, because it intercepts syscall using <code>ptrace</code> instead of relying on the <code>LD_PRELOAD</code> trick. 
-    <br><b>NB: proxychains-ng won't work</b>.
-</details>
