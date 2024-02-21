@@ -10,7 +10,11 @@ require (
 	github.com/masterzen/winrm v0.0.0-20231227165926-e811dad5ac77
 )
 
-require github.com/docker/go-units v0.5.0 // indirect
+require (
+	github.com/docker/go-units v0.5.0 // indirect
+	github.com/geoffgarside/ber v1.1.0 // indirect
+	github.com/hirochachacha/go-smb2 v1.1.0 // indirect
+)
 
 require (
 	github.com/Azure/go-ntlmssp v0.0.0-20221128193559-754e69321358 // indirect
