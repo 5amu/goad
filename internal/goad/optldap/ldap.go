@@ -1,4 +1,4 @@
-package goad
+package optldap
 
 import (
 	"fmt"
@@ -12,7 +12,7 @@ import (
 	"github.com/5amu/goad/pkg/smb"
 )
 
-type LdapOptions struct {
+type Options struct {
 	Targets struct {
 		TARGETS []string `description:"Provide target IP/FQDN/FILE"`
 	} `positional-args:"yes"`
@@ -71,7 +71,7 @@ type LdapOptions struct {
 	credentials    []utils.Credential
 }
 
-func (o *LdapOptions) getFunction() func(string) {
+func (o *Options) getFunction() func(string) {
 	if o.CustomQuery.SearchFilter != "" && o.CustomQuery.Attributes != "" {
 		o.filter = o.CustomQuery.SearchFilter
 		o.attributes = strings.Split(o.CustomQuery.Attributes, ",")
@@ -155,7 +155,7 @@ func (o *LdapOptions) getFunction() func(string) {
 	return o.testCredentials
 }
 
-func (o *LdapOptions) Run() (err error) {
+func (o *Options) Run() (err error) {
 	o.targets = utils.ExtractTargets(o.Targets.TARGETS)
 	o.target2SMBInfo = utils.GatherSMBInfoToMap(&o.printMutex, o.targets, o.Connection.Port)
 	var f func(string) = o.getFunction()
@@ -181,7 +181,7 @@ func (o *LdapOptions) Run() (err error) {
 	return nil
 }
 
-func (o *LdapOptions) testCredentials(target string) {
+func (o *Options) testCredentials(target string) {
 	lclient := ldap.NewLdapClient(target, o.Connection.Port, o.Connection.Domain, o.Connection.SSL, !o.Connection.UseTLS)
 
 	prt := printer.NewPrinter("LDAP", lclient.Host, o.target2SMBInfo[lclient.Host].NetBIOSName, lclient.Port)
@@ -210,7 +210,7 @@ func (o *LdapOptions) testCredentials(target string) {
 	}
 }
 
-func (o *LdapOptions) authenticate(ldapClient *ldap.LdapClient) (utils.Credential, error) {
+func (o *Options) authenticate(ldapClient *ldap.LdapClient) (utils.Credential, error) {
 	prt := printer.NewPrinter("LDAP", ldapClient.Host, o.target2SMBInfo[ldapClient.Host].NetBIOSName, ldapClient.Port)
 	defer prt.PrintStored(&o.printMutex)
 
@@ -234,7 +234,7 @@ func (o *LdapOptions) authenticate(ldapClient *ldap.LdapClient) (utils.Credentia
 	return utils.Credential{}, fmt.Errorf("no valid authentication")
 }
 
-func (o *LdapOptions) asreproast(target string) {
+func (o *Options) asreproast(target string) {
 	prt := printer.NewPrinter("LDAP", target, o.target2SMBInfo[target].NetBIOSName, o.Connection.Port)
 	defer prt.PrintStored(&o.printMutex)
 
@@ -282,7 +282,7 @@ func (o *LdapOptions) asreproast(target string) {
 	}
 }
 
-func (o *LdapOptions) kerberoast(target string) {
+func (o *Options) kerberoast(target string) {
 	prt := printer.NewPrinter("LDAP", target, o.target2SMBInfo[target].NetBIOSName, o.Connection.Port)
 	defer prt.PrintStored(&o.printMutex)
 
@@ -342,7 +342,7 @@ func (o *LdapOptions) kerberoast(target string) {
 	}
 }
 
-func (o *LdapOptions) enumeration(target string) {
+func (o *Options) enumeration(target string) {
 	prt := printer.NewPrinter("LDAP", target, o.target2SMBInfo[target].NetBIOSName, o.Connection.Port)
 	defer prt.PrintStored(&o.printMutex)
 
@@ -389,7 +389,7 @@ func (o *LdapOptions) enumeration(target string) {
 	}
 }
 
-func (o *LdapOptions) domainSID(target string) {
+func (o *Options) domainSID(target string) {
 	prt := printer.NewPrinter("LDAP", target, o.target2SMBInfo[target].NetBIOSName, o.Connection.Port)
 	defer prt.PrintStored(&o.printMutex)
 

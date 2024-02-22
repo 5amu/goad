@@ -1,4 +1,4 @@
-package goad
+package optssh
 
 import (
 	"bytes"
@@ -11,7 +11,7 @@ import (
 	"github.com/5amu/goad/pkg/ssh"
 )
 
-type SshOptions struct {
+type Options struct {
 	Targets struct {
 		TARGETS []string `description:"Provide target IP/FQDN/FILE"`
 	} `positional-args:"yes"`
@@ -63,7 +63,7 @@ func gatherSSHBanner2Map(mutex *sync.Mutex, targets []string, port int) map[stri
 	return res
 }
 
-func (o *SshOptions) Run() error {
+func (o *Options) Run() error {
 	o.targets = utils.ExtractTargets(o.Targets.TARGETS)
 	o.credentials = utils.NewCredentialsClusterBomb(
 		utils.ExtractLinesFromFileOrString(o.Connection.Username),
@@ -94,7 +94,7 @@ func (o *SshOptions) Run() error {
 	return nil
 }
 
-func (o *SshOptions) authenticate(target string) (*ssh.Client, error) {
+func (o *Options) authenticate(target string) (*ssh.Client, error) {
 	prt := printer.NewPrinter("SSH", target, o.target2Banner[target], o.Connection.Port)
 	defer prt.PrintStored(&o.printMutex)
 
@@ -126,7 +126,7 @@ func (o *SshOptions) authenticate(target string) (*ssh.Client, error) {
 	return nil, fmt.Errorf("no valid credential provided")
 }
 
-func (o *SshOptions) exec(target string) {
+func (o *Options) exec(target string) {
 	prt := printer.NewPrinter("SSH", target, o.target2Banner[target], o.Connection.Port)
 	defer prt.PrintStored(&o.printMutex)
 
@@ -148,7 +148,7 @@ func (o *SshOptions) exec(target string) {
 	}
 }
 
-func (o *SshOptions) shell(target string) {
+func (o *Options) shell(target string) {
 	prt := printer.NewPrinter("SSH", target, o.target2Banner[target], o.Connection.Port)
 	defer prt.PrintStored(&o.printMutex)
 

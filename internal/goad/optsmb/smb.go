@@ -1,4 +1,4 @@
-package goad
+package optsmb
 
 import (
 	"fmt"
@@ -11,7 +11,7 @@ import (
 	"github.com/fatih/color"
 )
 
-type SmbOptions struct {
+type Options struct {
 	Targets struct {
 		TARGETS []string `description:"Provide target IP/FQDN/FILE"`
 	} `positional-args:"yes"`
@@ -31,14 +31,14 @@ type SmbOptions struct {
 	targets        []string
 }
 
-func (o *SmbOptions) getFunction() func(string) {
+func (o *Options) getFunction() func(string) {
 	if o.Shares {
 		return o.enumShares
 	}
 	return o.testCredentials
 }
 
-func (o *SmbOptions) Run() error {
+func (o *Options) Run() error {
 	o.targets = utils.ExtractTargets(o.Targets.TARGETS)
 	o.target2SMBInfo = utils.GatherSMBInfoToMap(&o.printMutex, o.targets, 445)
 	var f func(string) = o.getFunction()
@@ -62,7 +62,7 @@ func (o *SmbOptions) Run() error {
 	return nil
 }
 
-func (o *SmbOptions) testCredentials(target string) {
+func (o *Options) testCredentials(target string) {
 	client := smb.NewClient(target, 445, o.Connection.Domain)
 
 	prt := printer.NewPrinter("SMB", client.Host, o.target2SMBInfo[client.Host].NetBIOSName, 445)
@@ -99,7 +99,7 @@ func (o *SmbOptions) testCredentials(target string) {
 	}
 }
 
-func (o *SmbOptions) authenticate(client *smb.Client) (utils.Credential, error) {
+func (o *Options) authenticate(client *smb.Client) (utils.Credential, error) {
 	prt := printer.NewPrinter("SMB", client.Host, o.target2SMBInfo[client.Host].NetBIOSName, 445)
 	defer prt.PrintStored(&o.printMutex)
 
@@ -145,7 +145,7 @@ func shareToSlice(s smb.Share) []string {
 	return append(out, builder.String())
 }
 
-func (o *SmbOptions) enumShares(target string) {
+func (o *Options) enumShares(target string) {
 	prt := printer.NewPrinter("SMB", target, o.target2SMBInfo[target].NetBIOSName, 445)
 	defer prt.PrintStored(&o.printMutex)
 

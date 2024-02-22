@@ -5,20 +5,29 @@ import (
 	"os"
 
 	"github.com/5amu/go-flags"
-	"github.com/5amu/goad/internal/goad"
+	"github.com/5amu/goad/internal/goad/optftp"
+	"github.com/5amu/goad/internal/goad/optkrb5"
+	"github.com/5amu/goad/internal/goad/optldap"
+	"github.com/5amu/goad/internal/goad/optmssql"
+	"github.com/5amu/goad/internal/goad/optrdp"
+	"github.com/5amu/goad/internal/goad/optsmb"
+	"github.com/5amu/goad/internal/goad/optssh"
+	"github.com/5amu/goad/internal/goad/optvnc"
+	"github.com/5amu/goad/internal/goad/optwinrm"
+	"github.com/5amu/goad/internal/goad/optwmi"
 )
 
 type MainOptions struct {
-	FTP   goad.FtpOptions   `command:"ftp" description:"own stuff using SMB"`
-	LDAP  goad.LdapOptions  `command:"ldap" description:"own stuff using LDAP"`
-	KRB5  goad.Krb5Options  `command:"krb5" description:"own stuff using Kerberos"`
-	MSSQL goad.MssqlOptions `command:"mssql" description:"own stuff using MSSQL"`
-	RDP   goad.RdpOptions   `command:"rdp" description:"own stuff using RDP"`
-	SMB   goad.SmbOptions   `command:"smb" description:"own stuff using SMB"`
-	SSH   goad.SshOptions   `command:"ssh" description:"own stuff using SSH"`
-	VNC   goad.VncOptions   `command:"vnc" description:"own stuff using VNC"`
-	WINRM goad.WinrmOptions `command:"winrm" description:"own stuff using WINRM"`
-	WMI   goad.WmiOptions   `command:"wmi" description:"own stuff using WMI"`
+	FTP   optftp.Options   `command:"ftp" description:"own stuff using SMB"`
+	LDAP  optldap.Options  `command:"ldap" description:"own stuff using LDAP"`
+	KRB5  optkrb5.Options  `command:"krb5" description:"own stuff using Kerberos"`
+	MSSQL optmssql.Options `command:"mssql" description:"own stuff using MSSQL"`
+	RDP   optrdp.Options   `command:"rdp" description:"own stuff using RDP"`
+	SMB   optsmb.Options   `command:"smb" description:"own stuff using SMB"`
+	SSH   optssh.Options   `command:"ssh" description:"own stuff using SSH"`
+	VNC   optvnc.Options   `command:"vnc" description:"own stuff using VNC"`
+	WINRM optwinrm.Options `command:"winrm" description:"own stuff using WINRM"`
+	WMI   optwmi.Options   `command:"wmi" description:"own stuff using WMI"`
 }
 
 func main() {

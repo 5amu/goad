@@ -1,4 +1,4 @@
-package goad
+package optwinrm
 
 import (
 	"bytes"
@@ -14,7 +14,7 @@ import (
 	"github.com/masterzen/winrm"
 )
 
-type WinrmOptions struct {
+type Options struct {
 	Targets struct {
 		TARGETS []string `description:"Provide target IP/FQDN/FILE"`
 	} `positional-args:"yes"`
@@ -38,7 +38,7 @@ type WinrmOptions struct {
 	cmd            string
 }
 
-func (o *WinrmOptions) getFunction() func(string) {
+func (o *Options) getFunction() func(string) {
 	if o.Mode.Exec != "" {
 		o.cmd = o.Mode.Exec
 		return o.exec
@@ -49,7 +49,7 @@ func (o *WinrmOptions) getFunction() func(string) {
 	return nil
 }
 
-func (o *WinrmOptions) Run() error {
+func (o *Options) Run() error {
 	o.targets = utils.ExtractTargets(o.Targets.TARGETS)
 	o.target2SMBInfo = utils.GatherSMBInfoToMap(&o.printMutex, o.targets, o.Connection.Port)
 	var f func(string) = o.getFunction()
@@ -76,7 +76,7 @@ func (o *WinrmOptions) Run() error {
 	return nil
 }
 
-func (o *WinrmOptions) exec(target string) {
+func (o *Options) exec(target string) {
 	prt := printer.NewPrinter("WINRM", target, o.target2SMBInfo[target].NetBIOSName, o.Connection.Port)
 	defer prt.PrintStored(&o.printMutex)
 
@@ -114,7 +114,7 @@ func (o *WinrmOptions) exec(target string) {
 	}
 }
 
-func (o *WinrmOptions) openShell(target string) {
+func (o *Options) openShell(target string) {
 	prt := printer.NewPrinter("WINRM", target, o.target2SMBInfo[target].NetBIOSName, o.Connection.Port)
 	defer prt.PrintStored(&o.printMutex)
 

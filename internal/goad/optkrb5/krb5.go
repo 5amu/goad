@@ -1,4 +1,4 @@
-package goad
+package optkrb5
 
 import (
 	"sync"
@@ -9,7 +9,7 @@ import (
 	"github.com/5amu/goad/pkg/smb"
 )
 
-type Krb5Options struct {
+type Options struct {
 	Targets struct {
 		TARGETS []string `description:"Provide target IP/FQDN/FILE"`
 	} `positional-args:"yes"`
@@ -35,14 +35,14 @@ type Krb5Options struct {
 	credentials    []utils.Credential
 }
 
-func (o *Krb5Options) getFunction() func(string) {
+func (o *Options) getFunction() func(string) {
 	if o.Mode.UserEnum {
 		return o.userenum
 	}
 	return o.bruteforce
 }
 
-func (o *Krb5Options) Run() error {
+func (o *Options) Run() error {
 	o.targets = utils.ExtractTargets(o.Targets.TARGETS)
 	o.target2SMBInfo = utils.GatherSMBInfoToMap(&o.printMutex, o.targets, 88)
 	var f func(string) = o.getFunction()
@@ -70,7 +70,7 @@ func (o *Krb5Options) Run() error {
 	return nil
 }
 
-func (o *Krb5Options) userenum(target string) {
+func (o *Options) userenum(target string) {
 	prt := printer.NewPrinter("KRB5", target, o.target2SMBInfo[target].NetBIOSName, 88)
 	defer prt.PrintStored(&o.printMutex)
 
@@ -96,7 +96,7 @@ func (o *Krb5Options) userenum(target string) {
 	}
 }
 
-func (o *Krb5Options) bruteforce(target string) {
+func (o *Options) bruteforce(target string) {
 	prt := printer.NewPrinter("KRB5", target, o.target2SMBInfo[target].NetBIOSName, 88)
 	defer prt.PrintStored(&o.printMutex)
 
