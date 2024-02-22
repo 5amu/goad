@@ -220,7 +220,9 @@ func (c *Client) AdminShareWritable() bool {
 	if err != nil {
 		return false
 	}
-	defer fs.Umount()
+	defer func() {
+		_ = fs.Umount()
+	}()
 
 	err = fs.WriteFile("goadtest.txt", []byte("test"), 0444)
 	if !os.IsPermission(err) {
