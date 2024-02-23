@@ -25,13 +25,13 @@ func getConnection(network string, host string, port int) (net.Conn, error) {
 		if err != nil {
 			return nil, err
 		}
-		return conn, conn.SetDeadline(time.Now().Add(2 * time.Second))
+		return conn, nil
 	}
 	conn, err := net.DialTimeout(network, fmt.Sprintf("%s:%d", host, port), 2*time.Second)
 	if err != nil {
 		return nil, err
 	}
-	return conn, conn.SetDeadline(time.Now().Add(2 * time.Second))
+	return conn, nil
 }
 
 func GetConnection(host string, port int) (net.Conn, error) {
