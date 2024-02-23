@@ -78,8 +78,10 @@ func GatherSMBInfo(host string) (*SMBInfo, error) {
 		}
 	}
 
-	if data != nil {
+	if data != nil && data.NegotiationLog != nil {
 		info.SigningRequired = data.NegotiationLog.SecurityMode&zgrabsmb.SecurityModeSigningRequired > 0
+	} else {
+		info.SigningRequired = true
 	}
 	return &info, nil
 }
