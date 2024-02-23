@@ -68,7 +68,7 @@ func (p *Printer) print(symbol string, msg ...string) {
 	row.WriteString(p.config.FirstColumnFormatter("%-8s", p.module))
 	row.WriteString(fmt.Sprintf("%-16s", p.target))
 	row.WriteString(fmt.Sprintf("%-5d", p.port))
-	row.WriteString(fmt.Sprintf("%-16s", p.netbios))
+	row.WriteString(fmt.Sprintf("%-20s", p.netbios))
 
 	var message strings.Builder
 	for _, part := range msg {
@@ -117,7 +117,7 @@ func (p *Printer) store(symbol string, msg ...string) {
 	row.WriteString(p.config.FirstColumnFormatter("%-8s", p.module))
 	row.WriteString(fmt.Sprintf("%-16s", p.target))
 	row.WriteString(fmt.Sprintf("%-5d", p.port))
-	row.WriteString(fmt.Sprintf("%-16s", p.netbios))
+	row.WriteString(fmt.Sprintf("%-20s", p.netbios))
 
 	var message strings.Builder
 	for _, part := range msg {

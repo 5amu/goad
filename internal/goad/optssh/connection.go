@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/5amu/goad/pkg/utils"
@@ -102,6 +103,14 @@ func Shell(c *ssh.Client) error {
 	return session.Wait()
 }
 
+func ParseBanner(s string) string {
+	spl := strings.Split(s, " ")
+	if len(spl) == 1 {
+		return s
+	}
+	return spl[1]
+}
+
 func GrabBanner(host string, port int) (string, error) {
 	conn, err := utils.GetConnection(host, port)
 	if err != nil {
@@ -114,5 +123,5 @@ func GrabBanner(host string, port int) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return string(banner[:n]), nil
+	return strings.ReplaceAll(string(banner[:n]), "\r\n", ""), nil
 }

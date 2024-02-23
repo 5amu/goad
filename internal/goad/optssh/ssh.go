@@ -47,10 +47,10 @@ func gatherSSHBanner2Map(mutex *sync.Mutex, targets []string, port int) map[stri
 		wg.Add(1)
 		go func(p string) {
 			s, err := GrabBanner(p, port)
-			prt := printer.NewPrinter("SSH", p, s, port)
+			prt := printer.NewPrinter("SSH", p, ParseBanner(s), port)
 			if err == nil {
 				mapMutex.Lock()
-				res[p] = s
+				res[p] = ParseBanner(s)
 				mapMutex.Unlock()
 				prt.PrintInfo(s)
 			} else {
