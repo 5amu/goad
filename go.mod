@@ -38,8 +38,6 @@ require (
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/praetorian-inc/fingerprintx v1.1.13
 	github.com/tidwall/transform v0.0.0-20201103190739-32f242e2dbde // indirect
-	github.com/weppos/publicsuffix-go v0.30.1-0.20230422193905-8fecedd899db // indirect
-	github.com/zmap/zcrypto v0.0.0-20230422215203-9a665e1e9968 // indirect
 	github.com/zmap/zgrab2 v0.1.8-0.20230806160807-97ba87c0e706
 	golang.org/x/crypto v0.19.0
 	golang.org/x/net v0.19.0
