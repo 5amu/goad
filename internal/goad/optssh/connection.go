@@ -1,22 +1,16 @@
-package ssh
+package optssh
 
 import (
 	"fmt"
 	"io"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/5amu/goad/pkg/utils"
-	zgrab "github.com/zmap/zgrab2/lib/ssh"
 	"golang.org/x/crypto/ssh"
 )
 
-type Client struct {
-	conn *ssh.Client
-}
-
-func connect(user string, signer ssh.AuthMethod, host string, port int) (*Client, error) {
+func connect(user string, signer ssh.AuthMethod, host string, port int) (*ssh.Client, error) {
 	conn, err := utils.GetConnection(host, port)
 	if err != nil {
 		return nil, err
@@ -30,16 +24,14 @@ func connect(user string, signer ssh.AuthMethod, host string, port int) (*Client
 	if err != nil {
 		return nil, err
 	}
-	return &Client{
-		conn: ssh.NewClient(c, ch, req),
-	}, err
+	return ssh.NewClient(c, ch, req), err
 }
 
-func ConnectWithPassword(user, pass string, host string, port int) (*Client, error) {
+func ConnectWithPassword(user, pass string, host string, port int) (*ssh.Client, error) {
 	return connect(user, ssh.Password(pass), host, port)
 }
 
-func ConnectWithKey(user, keyPath string, host string, port int) (*Client, error) {
+func ConnectWithKey(user, keyPath string, host string, port int) (*ssh.Client, error) {
 	key, err := os.ReadFile(keyPath)
 	if err != nil {
 		return nil, err
@@ -51,8 +43,8 @@ func ConnectWithKey(user, keyPath string, host string, port int) (*Client, error
 	return connect(user, ssh.PublicKeys(signer), host, port)
 }
 
-func (c *Client) Run(cmd string, stdout, stderr io.Writer) error {
-	session, err := c.conn.NewSession()
+func Run(c *ssh.Client, cmd string, stdout, stderr io.Writer) error {
+	session, err := c.NewSession()
 	if err != nil {
 		return err
 	}
@@ -83,8 +75,8 @@ func (c *Client) Run(cmd string, stdout, stderr io.Writer) error {
 	return nil
 }
 
-func (c *Client) Shell() error {
-	session, err := c.conn.NewSession()
+func Shell(c *ssh.Client) error {
+	session, err := c.NewSession()
 	if err != nil {
 		return err
 	}
@@ -110,32 +102,17 @@ func (c *Client) Shell() error {
 	return session.Wait()
 }
 
-func (c *Client) Close() error {
-	return c.conn.Close()
-}
-
 func GrabBanner(host string, port int) (string, error) {
-	data := new(zgrab.HandshakeLog)
-
-	sshConfig := zgrab.MakeSSHConfig()
-	sshConfig.Timeout = 10 * time.Second
-	sshConfig.ConnLog = data
-	sshConfig.DontAuthenticate = true
-	sshConfig.BannerCallback = func(banner string) error {
-		data.Banner = strings.TrimSpace(banner)
-		return nil
-	}
-
 	conn, err := utils.GetConnection(host, port)
 	if err != nil {
 		return "", err
 	}
-	c, ch, req, err := zgrab.NewClientConn(conn, fmt.Sprintf("%s:%d", host, port), sshConfig)
+	defer conn.Close()
+
+	banner := make([]byte, 256)
+	n, err := conn.Read(banner)
 	if err != nil {
 		return "", err
 	}
-
-	client := zgrab.NewClient(c, ch, req)
-	defer client.Close()
-	return data.ServerID.SoftwareVersion, nil
+	return string(banner[:n]), nil
 }

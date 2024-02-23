@@ -8,7 +8,7 @@ import (
 
 	"github.com/5amu/goad/internal/printer"
 	"github.com/5amu/goad/internal/utils"
-	"github.com/5amu/goad/pkg/ssh"
+	"golang.org/x/crypto/ssh"
 )
 
 type Options struct {
@@ -46,7 +46,7 @@ func gatherSSHBanner2Map(mutex *sync.Mutex, targets []string, port int) map[stri
 	for _, t := range targets {
 		wg.Add(1)
 		go func(p string) {
-			s, err := ssh.GrabBanner(p, port)
+			s, err := GrabBanner(p, port)
 			prt := printer.NewPrinter("SSH", p, s, port)
 			if err == nil {
 				mapMutex.Lock()
@@ -102,14 +102,14 @@ func (o *Options) authenticate(target string) (*ssh.Client, error) {
 	for _, cred := range o.credentials {
 		var err error
 		if o.Connection.PrivKey != "" {
-			c, err = ssh.ConnectWithKey(
+			c, err = ConnectWithKey(
 				cred.Username,
 				o.Connection.PrivKey,
 				target,
 				o.Connection.Port,
 			)
 		} else {
-			c, err = ssh.ConnectWithPassword(
+			c, err = ConnectWithPassword(
 				o.Connection.Username,
 				o.Connection.Password,
 				target,
@@ -137,7 +137,7 @@ func (o *Options) exec(target string) {
 	}
 
 	var stdoutBuff, stderrBuff bytes.Buffer
-	if err := c.Run(o.cmd, &stdoutBuff, &stderrBuff); err != nil {
+	if err := Run(c, o.cmd, &stdoutBuff, &stderrBuff); err != nil {
 		prt.StoreFailure(err.Error())
 	}
 
@@ -160,14 +160,14 @@ func (o *Options) shell(target string) {
 	var err error
 	var c *ssh.Client
 	if o.Connection.Password != "" {
-		c, err = ssh.ConnectWithPassword(
+		c, err = ConnectWithPassword(
 			o.Connection.Username,
 			o.Connection.Password,
 			target,
 			o.Connection.Port,
 		)
 	} else if o.Connection.PrivKey != "" {
-		c, err = ssh.ConnectWithKey(
+		c, err = ConnectWithKey(
 			o.Connection.Username,
 			o.Connection.PrivKey,
 			target,
@@ -178,8 +178,7 @@ func (o *Options) shell(target string) {
 		prt.StoreFailure(err.Error())
 		return
 	}
-	err = c.Shell()
-	if err != nil {
+	if err := Shell(c); err != nil {
 		prt.StoreFailure(err.Error())
 		return
 	}
