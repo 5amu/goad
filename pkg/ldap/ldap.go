@@ -50,14 +50,13 @@ func (c *LdapClient) Connect() error {
 		return nil
 	}
 	c.Conn = ldap.NewConn(conn, c.UseSSL)
+	c.Conn.Start()
 
 	if !c.SkipTLS {
 		return c.Conn.StartTLS(&tls.Config{
 			InsecureSkipVerify: true,
 			ServerName:         c.Host,
 		})
-	} else {
-		c.Conn.Start()
 	}
 	return nil
 }

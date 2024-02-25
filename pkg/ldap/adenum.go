@@ -1,9 +1,12 @@
 package ldap
 
 import (
+	"encoding/hex"
 	"fmt"
 
+	"github.com/5amu/goad/pkg/mstypes"
 	"github.com/go-ldap/ldap/v3"
+	"golang.org/x/crypto/md4"
 )
 
 type ADObject struct {
@@ -73,4 +76,42 @@ func (c *LdapClient) FindADObjectsWithCallback(filter string, callback func(ADOb
 		}
 	}
 	return nil
+}
+
+type GMSA struct {
+	SAMAccountName string
+	NTLM           string
+}
+
+func (c *LdapClient) GetGMSA() ([]GMSA, error) {
+	objects, err := c.FindObjects(
+		"(objectClass=msDS-GroupManagedServiceAccount)",
+		"sAMAccountName",
+		"msDS-ManagedPassword",
+		"msDS-GroupMSAMembership",
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	var gmsa []GMSA
+	for _, obj := range objects {
+		g := GMSA{}
+		name, ok1 := obj[SAMAccountName]
+		if ok1 {
+			g.SAMAccountName = name
+		}
+		pass, ok2 := obj["msDS-ManagedPassword"]
+		if ok2 {
+			mdfour := md4.New()
+			blob := mstypes.NewMSDSManagedPasswordBlob([]byte(pass))
+			pass := blob.CurrentPassword
+			_, _ = mdfour.Write(pass)
+			g.NTLM = hex.EncodeToString(mdfour.Sum(nil))
+		}
+		if ok1 && ok2 {
+			gmsa = append(gmsa, g)
+		}
+	}
+	return gmsa, nil
 }

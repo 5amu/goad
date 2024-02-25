@@ -18,18 +18,18 @@ type Options struct {
 	} `positional-args:"yes"`
 
 	CustomQuery struct {
-		SearchFilter string `short:"f" long:"filter" description:"bring your own filter"`
-		Attributes   string `short:"a" long:"attributes" description:"ask your attributes (comma separated)"`
+		SearchFilter string `short:"f" long:"filter" description:"Bring your own filter"`
+		Attributes   string `short:"a" long:"attributes" description:"Ask your attributes (comma separated)"`
 	}
 
 	Connection struct {
 		Username string `short:"u" description:"Provide username (or FILE)"`
 		Password string `short:"p" description:"Provide password (or FILE)"`
-		NTLM     string `short:"H" long:"hashes" description:"authenticate with NTLM hash"`
+		NTLM     string `short:"H" long:"hashes" description:"Authenticate with NTLM hash"`
 		Domain   string `short:"d" long:"domain" description:"Provide domain"`
 		Port     int    `long:"port" default:"389" description:"Ldap port to contact"`
 		SSL      bool   `short:"s" long:"ssl" description:"Use ssl to interact with ldap"`
-		UseTLS   bool   `long:"tls" description:"Upgrade the ldap connection"`
+		SkipTLS  bool   `long:"skiptls" description:"Upgrade the ldap connection"`
 	} `group:"Connection Options" description:"Connection Options"`
 
 	Hashes struct {
@@ -49,15 +49,10 @@ type Options struct {
 		Groups               bool   `long:"groups" description:"Enumerate domain groups"`
 		DCList               bool   `long:"dc-list" description:"Enumerate Domain Controllers"`
 		GetSID               bool   `long:"get-sid" description:"Get domain sid"`
+		GMSA                 bool   `long:"gmsa" description:"Enumerate GMSA passwords"`
 	} `group:"Enumeration Options" description:"Enumeration Options"`
 
 	/*
-		GMSA struct {
-			GMSA           bool   `long:"gmsa" description:"Enumerate GMSA passwords"`
-			GMSAConvertID  string `long:"gmsa-convert-id" description:"Get the secret name of specific gmsa or all gmsa if no gmsa provided"`
-			GMSADecryptLSA string `long:"gmsa-decrypt-lsa" description:"Decrypt the gmsa encrypted value from LSA"`
-		} `group:"Play with GMSA" description:"Play with GMSA"`
-
 		BH struct {
 			Bloodhound           string   `long:"bloodhound" description:"Run bloodhound collector (v4.2) and save in output file (zip)"`
 			BloodhoundNameserver string   `short:"n" long:"nameserver" description:"Provide a nameserver for bloodhound collector"`
@@ -153,7 +148,12 @@ func (o *Options) getFunction() func(string) {
 		)
 		return o.enumeration
 	}
-	return o.testCredentials
+	if o.Enum.GMSA {
+		return o.gmsa
+	}
+	return func(s string) {
+		_, _, _ = o.authenticate(s)
+	}
 }
 
 func (o *Options) Run() (err error) {
@@ -185,36 +185,9 @@ func (o *Options) Run() (err error) {
 	return nil
 }
 
-func (o *Options) testCredentials(target string) {
-	lclient := ldap.NewLdapClient(target, o.Connection.Port, o.Connection.Domain, o.Connection.SSL, !o.Connection.UseTLS)
+func (o *Options) authenticate(target string) (*ldap.LdapClient, utils.Credential, error) {
+	ldapClient := ldap.NewLdapClient(target, o.Connection.Port, o.Connection.Domain, o.Connection.SSL, o.Connection.SkipTLS)
 
-	prt := printer.NewPrinter("LDAP", lclient.Host, o.target2SMBInfo[lclient.Host].NetBIOSName, lclient.Port)
-	defer prt.PrintStored(&o.printMutex)
-
-	var valid bool = false
-	for _, creds := range o.credentials {
-		if creds.Hash != "" {
-			if err := lclient.AuthenticateNTLM(creds.Username, creds.Hash); err != nil {
-				prt.StoreFailure(creds.StringWithDomain(o.Connection.Domain))
-			} else {
-				valid = true
-				prt.StoreSuccess(creds.StringWithDomain(o.Connection.Domain))
-			}
-		} else {
-			if err := lclient.Authenticate(creds.Username, creds.Password); err != nil {
-				prt.StoreFailure(creds.StringWithDomain(o.Connection.Domain))
-			} else {
-				valid = true
-				prt.StoreSuccess(creds.StringWithDomain(o.Connection.Domain))
-			}
-		}
-	}
-	if !valid {
-		prt.StoreFailure("no valid authentication")
-	}
-}
-
-func (o *Options) authenticate(ldapClient *ldap.LdapClient) (utils.Credential, error) {
 	prt := printer.NewPrinter("LDAP", ldapClient.Host, o.target2SMBInfo[ldapClient.Host].NetBIOSName, ldapClient.Port)
 	defer prt.PrintStored(&o.printMutex)
 
@@ -224,30 +197,35 @@ func (o *Options) authenticate(ldapClient *ldap.LdapClient) (utils.Credential, e
 				prt.StoreFailure(creds.StringWithDomain(o.Connection.Domain))
 			} else {
 				prt.StoreSuccess(creds.StringWithDomain(o.Connection.Domain))
-				return creds, nil
+				return ldapClient, creds, nil
 			}
 		} else {
 			if err := ldapClient.Authenticate(creds.Username, creds.Password); err != nil {
 				prt.StoreFailure(creds.StringWithDomain(o.Connection.Domain))
 			} else {
 				prt.StoreSuccess(creds.StringWithDomain(o.Connection.Domain))
-				return creds, nil
+				return ldapClient, creds, nil
 			}
 		}
 	}
-	return utils.Credential{}, fmt.Errorf("no valid authentication")
+	return nil, utils.Credential{}, fmt.Errorf("no valid authentication")
 }
 
 func (o *Options) asreproast(target string) {
 	prt := printer.NewPrinter("LDAP", target, o.target2SMBInfo[target].NetBIOSName, o.Connection.Port)
 	defer prt.PrintStored(&o.printMutex)
 
-	lclient := ldap.NewLdapClient(target, o.Connection.Port, o.Connection.Domain, o.Connection.SSL, !o.Connection.UseTLS)
+	lclient, creds, err := o.authenticate(target)
+	if err != nil {
+		prt.StoreFailure(err.Error())
+		return
+	}
+	defer lclient.Close()
+
 	ldapFilter := ldap.JoinFilters(
 		ldap.FilterIsUser,
 		ldap.UACFilter(ldap.DONT_REQ_PREAUTH),
 	)
-	defer lclient.Close()
 
 	krb5client, err := kerberos.NewKerberosClient(o.Connection.Domain, target)
 	if err != nil {
@@ -255,11 +233,6 @@ func (o *Options) asreproast(target string) {
 		return
 	}
 
-	creds, err := o.authenticate(lclient)
-	if err != nil {
-		prt.StoreFailure(err.Error())
-		return
-	}
 	krb5client.AuthenticateWithPassword(creds.Username, creds.Password)
 
 	var hashes []string
@@ -290,12 +263,17 @@ func (o *Options) kerberoast(target string) {
 	prt := printer.NewPrinter("LDAP", target, o.target2SMBInfo[target].NetBIOSName, o.Connection.Port)
 	defer prt.PrintStored(&o.printMutex)
 
-	lclient := ldap.NewLdapClient(target, o.Connection.Port, o.Connection.Domain, o.Connection.SSL, !o.Connection.UseTLS)
+	lclient, creds, err := o.authenticate(target)
+	if err != nil {
+		prt.StoreFailure(err.Error())
+		return
+	}
+	defer lclient.Close()
+
 	ldapFilter := ldap.JoinFilters(
 		ldap.FilterIsUser,
 		ldap.NegativeFilter(ldap.UACFilter(ldap.ACCOUNTDISABLE)),
 	)
-	defer lclient.Close()
 
 	krb5client, err := kerberos.NewKerberosClient(o.Connection.Domain, target)
 	if err != nil {
@@ -303,11 +281,6 @@ func (o *Options) kerberoast(target string) {
 		return
 	}
 
-	creds, err := o.authenticate(lclient)
-	if err != nil {
-		prt.StoreFailure(err.Error())
-		return
-	}
 	krb5client.AuthenticateWithPassword(creds.Username, creds.Password)
 
 	var hashes []string
@@ -350,14 +323,12 @@ func (o *Options) enumeration(target string) {
 	prt := printer.NewPrinter("LDAP", target, o.target2SMBInfo[target].NetBIOSName, o.Connection.Port)
 	defer prt.PrintStored(&o.printMutex)
 
-	lclient := ldap.NewLdapClient(target, o.Connection.Port, o.Connection.Domain, o.Connection.SSL, !o.Connection.UseTLS)
-	defer lclient.Close()
-
-	_, err := o.authenticate(lclient)
+	lclient, _, err := o.authenticate(target)
 	if err != nil {
 		prt.StoreFailure(err.Error())
 		return
 	}
+	defer lclient.Close()
 
 	err = lclient.FindADObjectsWithCallback(o.filter, func(obj ldap.ADObject) error {
 		if o.CustomQuery.Attributes == "" {
@@ -397,14 +368,12 @@ func (o *Options) domainSID(target string) {
 	prt := printer.NewPrinter("LDAP", target, o.target2SMBInfo[target].NetBIOSName, o.Connection.Port)
 	defer prt.PrintStored(&o.printMutex)
 
-	lclient := ldap.NewLdapClient(target, o.Connection.Port, o.Connection.Domain, o.Connection.SSL, !o.Connection.UseTLS)
-	defer lclient.Close()
-
-	_, err := o.authenticate(lclient)
+	lclient, _, err := o.authenticate(target)
 	if err != nil {
 		prt.StoreFailure(err.Error())
 		return
 	}
+	defer lclient.Close()
 
 	sid, err := lclient.GetDomainSID()
 	if err != nil {
@@ -413,4 +382,30 @@ func (o *Options) domainSID(target string) {
 	}
 
 	prt.Store(sid)
+}
+
+func (o *Options) gmsa(target string) {
+	prt := printer.NewPrinter("LDAP", target, o.target2SMBInfo[target].NetBIOSName, o.Connection.Port)
+	defer prt.PrintStored(&o.printMutex)
+
+	lclient, _, err := o.authenticate(target)
+	if err != nil {
+		prt.StoreFailure(err.Error())
+		return
+	}
+	defer lclient.Close()
+
+	gmsa, err := lclient.GetGMSA()
+	if err != nil {
+		prt.StoreFailure(err.Error())
+		return
+	}
+
+	if len(gmsa) > 0 {
+		prt.StoreInfo(fmt.Sprintf("Found GMSA Passwords: %d", len(gmsa)))
+	}
+
+	for _, g := range gmsa {
+		prt.Store(fmt.Sprintf("Account: %s", g.SAMAccountName), fmt.Sprintf("NTLM: %s", g.NTLM))
+	}
 }
