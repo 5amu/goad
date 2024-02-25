@@ -40,7 +40,7 @@ func (o *Options) getFunction() func(string) {
 
 func (o *Options) Run() error {
 	o.targets = utils.ExtractTargets(o.Targets.TARGETS)
-	o.target2SMBInfo = utils.GatherSMBInfoToMap(&o.printMutex, o.targets, 445)
+	o.target2SMBInfo = utils.GatherSMBInfoToMap(o.targets, 445)
 	var f func(string) = o.getFunction()
 
 	o.credentials = utils.NewCredentialsDispacher(

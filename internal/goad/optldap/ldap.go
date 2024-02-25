@@ -51,19 +51,20 @@ type Options struct {
 		GetSID               bool   `long:"get-sid" description:"Get domain sid"`
 	} `group:"Enumeration Options" description:"Enumeration Options"`
 
-	GMSA struct {
-		GMSA           bool   `long:"gmsa" description:"Enumerate GMSA passwords"`
-		GMSAConvertID  string `long:"gmsa-convert-id" description:"Get the secret name of specific gmsa or all gmsa if no gmsa provided"`
-		GMSADecryptLSA string `long:"gmsa-decrypt-lsa" description:"Decrypt the gmsa encrypted value from LSA"`
-	} `group:"Play with GMSA" description:"Play with GMSA"`
+	/*
+		GMSA struct {
+			GMSA           bool   `long:"gmsa" description:"Enumerate GMSA passwords"`
+			GMSAConvertID  string `long:"gmsa-convert-id" description:"Get the secret name of specific gmsa or all gmsa if no gmsa provided"`
+			GMSADecryptLSA string `long:"gmsa-decrypt-lsa" description:"Decrypt the gmsa encrypted value from LSA"`
+		} `group:"Play with GMSA" description:"Play with GMSA"`
 
-	BH struct {
-		Bloodhound           string   `long:"bloodhound" description:"Run bloodhound collector (v4.2) and save in output file (zip)"`
-		BloodhoundNameserver string   `short:"n" long:"nameserver" description:"Provide a nameserver for bloodhound collector"`
-		Collection           []string `short:"c" long:"collection" default:"Default" description:"Which information to collect. Supported: Group, LocalAdmin, Session, Trusts, Default, DCOnly, DCOM, RDP, PSRemote, LoggedOn, Container, ObjectProps, ACL, All"`
-	} `group:"Run Bloodhound Collector v4.2" description:"Run Bloodhound Collector v4.2"`
+		BH struct {
+			Bloodhound           string   `long:"bloodhound" description:"Run bloodhound collector (v4.2) and save in output file (zip)"`
+			BloodhoundNameserver string   `short:"n" long:"nameserver" description:"Provide a nameserver for bloodhound collector"`
+			Collection           []string `short:"c" long:"collection" default:"Default" description:"Which information to collect. Supported: Group, LocalAdmin, Session, Trusts, Default, DCOnly, DCOM, RDP, PSRemote, LoggedOn, Container, ObjectProps, ACL, All"`
+		} `group:"Run Bloodhound Collector v4.2" description:"Run Bloodhound Collector v4.2"`
+	*/
 
-	targets        []string
 	target2SMBInfo map[string]*smb.SMBInfo
 	filter         string
 	attributes     []string
@@ -156,8 +157,11 @@ func (o *Options) getFunction() func(string) {
 }
 
 func (o *Options) Run() (err error) {
-	o.targets = utils.ExtractTargets(o.Targets.TARGETS)
-	o.target2SMBInfo = utils.GatherSMBInfoToMap(&o.printMutex, o.targets, o.Connection.Port)
+	o.target2SMBInfo = utils.GatherSMBInfoToMap(
+		utils.ExtractTargets(o.Targets.TARGETS),
+		o.Connection.Port,
+	)
+
 	var f func(string) = o.getFunction()
 
 	o.credentials = utils.NewCredentialsDispacher(

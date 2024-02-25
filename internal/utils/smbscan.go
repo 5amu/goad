@@ -17,12 +17,9 @@ func getSMBInfo(host string) *smb.SMBInfo {
 	return data
 }
 
-func GatherSMBInfoToMap(mutex *sync.Mutex, targets []string, port int) map[string]*smb.SMBInfo {
+func GatherSMBInfoToMap(targets []string, port int) map[string]*smb.SMBInfo {
 	ret := make(map[string]*smb.SMBInfo)
 	var wg sync.WaitGroup
-
-	mutex.Lock()
-	defer mutex.Unlock()
 
 	var mapMutex sync.Mutex
 	guard := make(chan struct{}, DefaultMaxConcurrent)

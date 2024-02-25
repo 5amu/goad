@@ -44,7 +44,7 @@ func (o *Options) getFunction() func(string) {
 
 func (o *Options) Run() error {
 	o.targets = utils.ExtractTargets(o.Targets.TARGETS)
-	o.target2SMBInfo = utils.GatherSMBInfoToMap(&o.printMutex, o.targets, 88)
+	o.target2SMBInfo = utils.GatherSMBInfoToMap(o.targets, 88)
 	var f func(string) = o.getFunction()
 
 	var strategy utils.Strategy = utils.Clusterbomb

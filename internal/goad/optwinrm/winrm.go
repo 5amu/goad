@@ -51,7 +51,7 @@ func (o *Options) getFunction() func(string) {
 
 func (o *Options) Run() error {
 	o.targets = utils.ExtractTargets(o.Targets.TARGETS)
-	o.target2SMBInfo = utils.GatherSMBInfoToMap(&o.printMutex, o.targets, o.Connection.Port)
+	o.target2SMBInfo = utils.GatherSMBInfoToMap(o.targets, o.Connection.Port)
 	var f func(string) = o.getFunction()
 	if f == nil {
 		return nil

@@ -5,29 +5,24 @@ import (
 	"os"
 
 	"github.com/5amu/go-flags"
-	"github.com/5amu/goad/internal/goad/optftp"
 	"github.com/5amu/goad/internal/goad/optkrb5"
 	"github.com/5amu/goad/internal/goad/optldap"
-	"github.com/5amu/goad/internal/goad/optmssql"
-	"github.com/5amu/goad/internal/goad/optrdp"
 	"github.com/5amu/goad/internal/goad/optsmb"
 	"github.com/5amu/goad/internal/goad/optssh"
-	"github.com/5amu/goad/internal/goad/optvnc"
 	"github.com/5amu/goad/internal/goad/optwinrm"
-	"github.com/5amu/goad/internal/goad/optwmi"
 )
 
 type MainOptions struct {
-	FTP   optftp.Options   `command:"ftp" description:"own stuff using SMB"`
-	LDAP  optldap.Options  `command:"ldap" description:"own stuff using LDAP"`
-	KRB5  optkrb5.Options  `command:"krb5" description:"own stuff using Kerberos"`
-	MSSQL optmssql.Options `command:"mssql" description:"own stuff using MSSQL"`
-	RDP   optrdp.Options   `command:"rdp" description:"own stuff using RDP"`
-	SMB   optsmb.Options   `command:"smb" description:"own stuff using SMB"`
-	SSH   optssh.Options   `command:"ssh" description:"own stuff using SSH"`
-	VNC   optvnc.Options   `command:"vnc" description:"own stuff using VNC"`
+	//FTP  optftp.Options  `command:"ftp" description:"own stuff using SMB"`
+	LDAP optldap.Options `command:"ldap" description:"own stuff using LDAP"`
+	KRB5 optkrb5.Options `command:"krb5" description:"own stuff using Kerberos"`
+	//MSSQL optmssql.Options `command:"mssql" description:"own stuff using MSSQL"`
+	//RDP   optrdp.Options   `command:"rdp" description:"own stuff using RDP"`
+	SMB optsmb.Options `command:"smb" description:"own stuff using SMB"`
+	SSH optssh.Options `command:"ssh" description:"own stuff using SSH"`
+	//VNC   optvnc.Options   `command:"vnc" description:"own stuff using VNC"`
 	WINRM optwinrm.Options `command:"winrm" description:"own stuff using WINRM"`
-	WMI   optwmi.Options   `command:"wmi" description:"own stuff using WMI"`
+	//WMI   optwmi.Options   `command:"wmi" description:"own stuff using WMI"`
 }
 
 func main() {
@@ -47,11 +42,11 @@ func main() {
 	fmt.Println()
 	defer fmt.Println()
 
-	if p.Command.Find("ftp") == p.Active {
+	/*if p.Command.Find("ftp") == p.Active {
 		if err := opts.FTP.Run(); err != nil {
 			fmt.Println(err)
 		}
-	} else if p.Command.Find("ldap") == p.Active {
+	} else*/if p.Command.Find("ldap") == p.Active {
 		if err := opts.LDAP.Run(); err != nil {
 			fmt.Println(err)
 		}
@@ -59,14 +54,15 @@ func main() {
 		if err := opts.KRB5.Run(); err != nil {
 			fmt.Println(err)
 		}
-	} else if p.Command.Find("mssql") == p.Active {
-		if err := opts.MSSQL.Run(); err != nil {
-			fmt.Println(err)
-		}
-	} else if p.Command.Find("rdp") == p.Active {
-		if err := opts.RDP.Run(); err != nil {
-			fmt.Println(err)
-		}
+		/*} else if p.Command.Find("mssql") == p.Active {
+			if err := opts.MSSQL.Run(); err != nil {
+				fmt.Println(err)
+			}
+		} else if p.Command.Find("rdp") == p.Active {
+			if err := opts.RDP.Run(); err != nil {
+				fmt.Println(err)
+			}
+		*/
 	} else if p.Command.Find("smb") == p.Active {
 		if err := opts.SMB.Run(); err != nil {
 			fmt.Println(err)
@@ -75,17 +71,19 @@ func main() {
 		if err := opts.SSH.Run(); err != nil {
 			fmt.Println(err)
 		}
-	} else if p.Command.Find("vnc") == p.Active {
+		/*} else if p.Command.Find("vnc") == p.Active {
 		if err := opts.VNC.Run(); err != nil {
 			fmt.Println(err)
 		}
+		*/
 	} else if p.Command.Find("winrm") == p.Active {
 		if err := opts.WINRM.Run(); err != nil {
 			fmt.Println(err)
 		}
-	} else if p.Command.Find("wmi") == p.Active {
+		/*} else if p.Command.Find("wmi") == p.Active {
 		if err := opts.WMI.Run(); err != nil {
 			fmt.Println(err)
 		}
+		*/
 	}
 }
