@@ -10,12 +10,6 @@ import (
 	"github.com/go-ldap/ldap/v3"
 )
 
-type connectOpts struct {
-	Host   string
-	Port   int
-	UseSSL bool
-}
-
 func connect(host string, port int, useSsl bool) (*ldap.Conn, error) {
 	conn, err := utils.GetConnection(host, port)
 	if err != nil {

