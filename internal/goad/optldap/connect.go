@@ -3,7 +3,6 @@ package optldap
 import (
 	"crypto/tls"
 	"fmt"
-	"net"
 	"time"
 
 	"github.com/5amu/goad/pkg/utils"
@@ -11,24 +10,23 @@ import (
 )
 
 func connect(host string, port int, useSsl bool) (*ldap.Conn, error) {
-	conn, err := utils.GetConnection(host, port)
-	if err != nil {
-		return nil, err
-	}
-
-	startConn := func(c net.Conn, ssl bool) *ldap.Conn {
-		client := ldap.NewConn(c, ssl)
+	startConn := func(ssl bool) *ldap.Conn {
+		conn, err := utils.GetConnection(host, port)
+		if err != nil {
+			return nil
+		}
+		client := ldap.NewConn(conn, ssl)
 		client.Start()
 		return client
 	}
 
 	if useSsl {
-		return startConn(conn, useSsl), nil
+		return startConn(useSsl), nil
 	}
 
 	ch := make(chan *ldap.Conn)
 	go func() {
-		client := startConn(conn, useSsl)
+		client := startConn(useSsl)
 		if err := client.StartTLS(&tls.Config{
 			InsecureSkipVerify: true,
 			ServerName:         host,
@@ -42,8 +40,8 @@ func connect(host string, port int, useSsl bool) (*ldap.Conn, error) {
 	var ret *ldap.Conn
 	select {
 	case ret = <-ch:
-	case <-time.After(2 * time.Second):
-		ret = startConn(conn, useSsl)
+	case <-time.After(time.Second):
+		ret = startConn(useSsl)
 	}
 	return ret, nil
 }

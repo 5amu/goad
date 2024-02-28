@@ -30,7 +30,6 @@ type Options struct {
 		Domain   string `short:"d" long:"domain" description:"Provide domain"`
 		Port     int    `long:"port" default:"389" description:"Ldap port to contact"`
 		SSL      bool   `short:"s" long:"ssl" description:"Use ssl to interact with ldap"`
-		SkipTLS  bool   `long:"skiptls" description:"Upgrade the ldap connection"`
 	} `group:"Connection Options" description:"Connection Options"`
 
 	Hashes struct {
@@ -384,6 +383,10 @@ func (o *Options) enumeration(target string) {
 		return
 	}
 	defer lclient.Close()
+
+	if o.filter == "" {
+		return
+	}
 
 	err = FindObjectsWithCallback(lclient, o.Connection.Domain, o.filter, func(m map[string]interface{}) error {
 		var data []string
