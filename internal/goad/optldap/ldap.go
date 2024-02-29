@@ -24,12 +24,13 @@ type Options struct {
 	}
 
 	Connection struct {
-		Username string `short:"u" description:"Provide username (or FILE)"`
-		Password string `short:"p" description:"Provide password (or FILE)"`
-		NTLM     string `short:"H" long:"hashes" description:"Authenticate with NTLM hash"`
-		Domain   string `short:"d" long:"domain" description:"Provide domain"`
-		Port     int    `long:"port" default:"389" description:"Ldap port to contact"`
-		SSL      bool   `short:"s" long:"ssl" description:"Use ssl to interact with ldap"`
+		Username    string `short:"u" description:"Provide username (or FILE)"`
+		Password    string `short:"p" description:"Provide password (or FILE)"`
+		NullSession bool   `long:"null-session" description:"authenticate with null credentials"`
+		NTLM        string `short:"H" long:"hashes" description:"Authenticate with NTLM hash"`
+		Domain      string `short:"d" long:"domain" description:"Provide domain"`
+		Port        int    `long:"port" default:"389" description:"Ldap port to contact"`
+		SSL         bool   `short:"s" long:"ssl" description:"Use ssl to interact with ldap"`
 	} `group:"Connection Options" description:"Connection Options"`
 
 	Hashes struct {
@@ -61,95 +62,159 @@ type Options struct {
 	*/
 
 	target2SMBInfo map[string]*smb.SMBInfo
+	filters        []string
 	filter         string
 	attributes     []string
 	printMutex     sync.Mutex
 	credentials    []utils.Credential
 }
 
-func (o *Options) getFunction() func(string) {
+type ExecutionFunction int
+
+const (
+	Undefined ExecutionFunction = iota
+	Enumeration
+	Kerberoast
+	Asreproast
+)
+
+func (o *Options) getFunction() ExecutionFunction {
 	if o.Hashes.AsrepRoast != "" {
 		o.filter = JoinFilters(
 			FilterIsUser,
 			UACFilter(DONT_REQ_PREAUTH),
 		)
-		return o.asreproast
-	} else if o.Hashes.Kerberoast != "" {
+		return Asreproast
+	}
+
+	if o.Hashes.Kerberoast != "" {
 		o.filter = JoinFilters(
 			FilterIsUser,
 			NegativeFilter(UACFilter(ACCOUNTDISABLE)),
 		)
-		return o.kerberoast
+		return Kerberoast
 	}
 
+	var function ExecutionFunction = Undefined
+
 	if o.Enum.GetSID {
-		o.filter = UACFilter(SERVER_TRUST_ACCOUNT)
+		o.filters = []string{UACFilter(SERVER_TRUST_ACCOUNT)}
 		o.attributes = []string{ObjectSid}
-		return o.enumeration
-	} else if o.Enum.TrustedForDelegation {
-		o.filter = JoinFilters(
+		return Enumeration
+	}
+
+	if o.Enum.GMSA {
+		o.filters = []string{FilterGMSA}
+		o.attributes = []string{SAMAccountName, ManagedPassword}
+		return Enumeration
+	}
+
+	if o.Enum.TrustedForDelegation {
+		o.filters = append(
+			o.filters,
 			FilterIsUser,
 			NegativeFilter(UACFilter(ACCOUNTDISABLE)),
 			UACFilter(TRUSTED_FOR_DELEGATION),
 		)
-		return o.enumeration
-	} else if o.Enum.PasswordNotRequired {
-		o.filter = JoinFilters(
+		function = Enumeration
+	}
+
+	if o.Enum.PasswordNotRequired {
+		o.filters = append(
+			o.filters,
 			FilterIsUser,
 			NegativeFilter(UACFilter(ACCOUNTDISABLE)),
 			UACFilter(PASSWD_NOTREQD),
 		)
-		return o.enumeration
-	} else if o.Enum.Users {
-		o.filter = FilterIsUser
-		return o.enumeration
-	} else if o.Enum.Computers {
-		o.filter = FilterIsComputer
-		return o.enumeration
-	} else if o.Enum.User != "" {
-		o.filter = JoinFilters(
+		function = Enumeration
+	}
+
+	if o.Enum.Users {
+		o.filters = append(o.filters, FilterIsUser)
+		function = Enumeration
+	}
+
+	if o.Enum.Computers {
+		o.filters = append(o.filters, FilterIsComputer)
+		function = Enumeration
+	}
+
+	if o.Enum.User != "" {
+		o.filters = append(
+			o.filters,
 			FilterIsUser,
 			NewFilter(SAMAccountName, o.Enum.User),
 		)
-		return o.enumeration
-	} else if o.Enum.ActiveUsers {
-		o.filter = JoinFilters(
+		function = Enumeration
+	}
+
+	if o.Enum.ActiveUsers {
+		o.filters = append(
+			o.filters,
 			FilterIsUser,
 			NegativeFilter(UACFilter(ACCOUNTDISABLE)),
 		)
-		return o.enumeration
-	} else if o.Enum.Groups {
-		o.filter = FilterIsGroup
-		return o.enumeration
-	} else if o.Enum.DCList {
-		o.filter = JoinFilters(
+		function = Enumeration
+	}
+
+	if o.Enum.Groups {
+		o.filters = append(o.filters, FilterIsGroup)
+		function = Enumeration
+	}
+
+	if o.Enum.DCList {
+		o.filters = append(
+			o.filters,
 			FilterIsComputer,
 			NegativeFilter(UACFilter(ACCOUNTDISABLE)),
 			UACFilter(SERVER_TRUST_ACCOUNT),
 		)
-		return o.enumeration
-	} else if o.Enum.PasswordNeverExpires {
-		o.filter = JoinFilters(
+		function = Enumeration
+	}
+
+	if o.Enum.PasswordNeverExpires {
+		o.filters = append(
+			o.filters,
 			FilterIsUser,
 			NegativeFilter(UACFilter(ACCOUNTDISABLE)),
 			UACFilter(DONT_EXPIRE_PASSWORD),
 		)
-		return o.enumeration
-	} else if o.Enum.AdminCount {
-		o.filter = JoinFilters(
+		function = Enumeration
+	}
+
+	if o.Enum.AdminCount {
+		o.filters = append(
+			o.filters,
 			FilterIsUser,
 			NegativeFilter(UACFilter(ACCOUNTDISABLE)),
 			FilterIsAdmin,
 		)
-		return o.enumeration
-	} else if o.Enum.GMSA {
-		o.filter = FilterGMSA
-		o.attributes = []string{SAMAccountName, ManagedPassword}
-		return o.enumeration
+		function = Enumeration
 	}
 
-	o.filter = o.CustomQuery.SearchFilter
-	return o.enumeration
+	if o.CustomQuery.SearchFilter != "" {
+		o.filters = append(
+			o.filters,
+			o.CustomQuery.SearchFilter,
+		)
+		function = Enumeration
+	}
+	return function
+}
+
+func (o *Options) parallelExecution(runner func(string)) {
+	o.filter = JoinFilters(o.filters...)
+	var wg sync.WaitGroup
+	for target := range o.target2SMBInfo {
+		wg.Add(1)
+		go func(t string) {
+			if IsLDAP(t, o.Connection.Port) {
+				runner(t)
+			}
+			wg.Done()
+		}(target)
+	}
+	wg.Wait()
 }
 
 func (o *Options) Run() (err error) {
@@ -158,67 +223,61 @@ func (o *Options) Run() (err error) {
 		o.Connection.Port,
 	)
 
-	o.credentials = utils.NewCredentialsDispacher(
-		o.Connection.Username,
-		o.Connection.Password,
-		o.Connection.NTLM,
-		utils.Clusterbomb,
-	)
+	if !o.Connection.NullSession {
+		o.credentials = utils.NewCredentialsDispacher(
+			o.Connection.Username,
+			o.Connection.Password,
+			o.Connection.NTLM,
+			utils.Clusterbomb,
+		)
+	}
 
-	if o.CustomQuery.Attributes == "" {
-		o.attributes = []string{
-			SAMAccountName,
-			Description,
-		}
-	} else {
-		tmp := strings.Split(o.CustomQuery.Attributes, ",")
-		for _, a := range tmp {
-			switch strings.ToLower(a) {
-			case strings.ToLower(SAMAccountName):
-				o.attributes = append(o.attributes, SAMAccountName)
-			case strings.ToLower(ServicePrincipalName):
-				o.attributes = append(o.attributes, ServicePrincipalName)
-			case strings.ToLower(ObjectSid):
-				o.attributes = append(o.attributes, ObjectSid)
-			case strings.ToLower(AdminCount):
-				o.attributes = append(o.attributes, AdminCount)
-			case strings.ToLower(DistinguishedName):
-				o.attributes = append(o.attributes, DistinguishedName)
-			case strings.ToLower(OperatingSystem):
-				o.attributes = append(o.attributes, OperatingSystem)
-			case strings.ToLower(OperatingSystemServicePack):
-				o.attributes = append(o.attributes, OperatingSystemServicePack)
-			case strings.ToLower(OperatingSystemVersion):
-				o.attributes = append(o.attributes, OperatingSystemVersion)
-			case strings.ToLower(PasswordLastSet):
-				o.attributes = append(o.attributes, PasswordLastSet)
-			case strings.ToLower(LastLogon):
-				o.attributes = append(o.attributes, LastLogon)
-			case strings.ToLower(MemberOf):
-				o.attributes = append(o.attributes, MemberOf)
-			case strings.ToLower(Description):
-				o.attributes = append(o.attributes, Description)
-			case strings.ToLower(ManagedPassword):
-				o.attributes = append(o.attributes, ManagedPassword)
-			default:
-				o.attributes = append(o.attributes, a)
-			}
+	tmp := strings.Split(o.CustomQuery.Attributes, ",")
+	for _, a := range tmp {
+		switch strings.ToLower(a) {
+		case strings.ToLower(SAMAccountName), "name":
+			o.attributes = append(o.attributes, SAMAccountName)
+		case strings.ToLower(ServicePrincipalName), "spn":
+			o.attributes = append(o.attributes, ServicePrincipalName)
+		case strings.ToLower(ObjectSid):
+			o.attributes = append(o.attributes, ObjectSid)
+		case strings.ToLower(AdminCount):
+			o.attributes = append(o.attributes, AdminCount)
+		case strings.ToLower(DistinguishedName), "dn":
+			o.attributes = append(o.attributes, DistinguishedName)
+		case strings.ToLower(OperatingSystem):
+			o.attributes = append(o.attributes, OperatingSystem)
+		case strings.ToLower(OperatingSystemServicePack):
+			o.attributes = append(o.attributes, OperatingSystemServicePack)
+		case strings.ToLower(OperatingSystemVersion):
+			o.attributes = append(o.attributes, OperatingSystemVersion)
+		case strings.ToLower(PasswordLastSet):
+			o.attributes = append(o.attributes, PasswordLastSet)
+		case strings.ToLower(LastLogon):
+			o.attributes = append(o.attributes, LastLogon)
+		case strings.ToLower(MemberOf):
+			o.attributes = append(o.attributes, MemberOf)
+		case strings.ToLower(Description):
+			o.attributes = append(o.attributes, Description)
+		case strings.ToLower(ManagedPassword):
+			o.attributes = append(o.attributes, ManagedPassword)
+		case "":
+			o.attributes = []string{SAMAccountName, Description}
+		default:
+			o.attributes = append(o.attributes, a)
 		}
 	}
 
-	var f func(string) = o.getFunction()
-
-	var wg sync.WaitGroup
-	for target := range o.target2SMBInfo {
-		wg.Add(1)
-		go func(t string) {
-			if IsLDAP(t, o.Connection.Port) {
-				f(t)
-			}
-			wg.Done()
-		}(target)
+	switch o.getFunction() {
+	case Asreproast:
+		o.parallelExecution(o.asreproast)
+	case Kerberoast:
+		o.parallelExecution(o.kerberoast)
+	case Enumeration:
+		o.parallelExecution(o.enumeration)
+	default:
+		return nil
 	}
-	wg.Wait()
 	return nil
 }
 
