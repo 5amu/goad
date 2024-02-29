@@ -40,7 +40,7 @@ func inc(ip net.IP) {
 	}
 }
 
-func ExtractTargets(list []string) []string {
+func extract(list []string, recurse bool) []string {
 	var res []string
 	for _, l := range list {
 		if isCIDR(l) {
@@ -50,12 +50,16 @@ func ExtractTargets(list []string) []string {
 				ips = append(ips, ip.String())
 			}
 			res = append(res, ips[1:len(ips)-1]...)
-		} else if isFile(l) {
+		} else if isFile(l) && recurse {
 			o, _ := readLines(l)
-			res = append(res, o...)
+			res = append(res, extract(o, false)...)
 		} else {
 			res = append(res, l)
 		}
 	}
 	return res
+}
+
+func ExtractTargets(list []string) []string {
+	return extract(list, true)
 }
