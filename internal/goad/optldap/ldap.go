@@ -275,6 +275,10 @@ func (o *Options) Run() (err error) {
 		o.parallelExecution(o.kerberoast)
 	case Enumeration:
 		o.parallelExecution(o.enumeration)
+	case Undefined:
+		o.parallelExecution(func(s string) {
+			_, _, _ = o.authenticate(s)
+		})
 	default:
 		return nil
 	}
@@ -282,6 +286,10 @@ func (o *Options) Run() (err error) {
 }
 
 func (o *Options) authenticate(target string) (*ldap.Conn, utils.Credential, error) {
+	if !o.Connection.NullSession && len(o.credentials) == 0 {
+		return nil, utils.Credential{}, fmt.Errorf("no credentials provided")
+	}
+
 	lconn, err := connect(target, o.Connection.Port, o.Connection.SSL)
 	if err != nil {
 		return nil, utils.Credential{}, err
@@ -289,6 +297,16 @@ func (o *Options) authenticate(target string) (*ldap.Conn, utils.Credential, err
 
 	prt := printer.NewPrinter("LDAP", target, o.target2SMBInfo[target].NetBIOSName, o.Connection.Port)
 	defer prt.PrintStored(&o.printMutex)
+
+	if o.Connection.NullSession {
+		if err := lconn.UnauthenticatedBind(""); err != nil {
+			prt.StoreFailure("null session not allowed")
+			return nil, utils.Credential{}, fmt.Errorf("no valid authentication")
+		}
+		c := utils.Credential{Username: o.Connection.Username, Password: o.Connection.Password}
+		prt.StoreSuccess(c.StringWithDomain(o.Connection.Domain))
+		return lconn, c, nil
+	}
 
 	for _, creds := range o.credentials {
 		if creds.Hash != "" {
