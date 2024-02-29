@@ -298,29 +298,34 @@ func (o *Options) authenticate(target string) (*ldap.Conn, utils.Credential, err
 	prt := printer.NewPrinter("LDAP", target, o.target2SMBInfo[target].NetBIOSName, o.Connection.Port)
 	defer prt.PrintStored(&o.printMutex)
 
+	var domain string = o.Connection.Domain
+	if domain == "" {
+		domain = o.target2SMBInfo[target].Domain
+	}
+
 	if o.Connection.NullSession {
 		if err := lconn.UnauthenticatedBind(""); err != nil {
 			prt.StoreFailure("null session not allowed")
 			return nil, utils.Credential{}, fmt.Errorf("no valid authentication")
 		}
 		c := utils.Credential{Username: o.Connection.Username, Password: o.Connection.Password}
-		prt.StoreSuccess(c.StringWithDomain(o.Connection.Domain))
+		prt.StoreSuccess(c.StringWithDomain(domain))
 		return lconn, c, nil
 	}
 
 	for _, creds := range o.credentials {
 		if creds.Hash != "" {
-			if err := lconn.NTLMBindWithHash(o.Connection.Domain, creds.Username, creds.Hash); err != nil {
-				prt.StoreFailure(creds.StringWithDomain(o.Connection.Domain))
+			if err := lconn.NTLMBindWithHash(domain, creds.Username, creds.Hash); err != nil {
+				prt.StoreFailure(creds.StringWithDomain(domain))
 			} else {
-				prt.StoreSuccess(creds.StringWithDomain(o.Connection.Domain))
+				prt.StoreSuccess(creds.StringWithDomain(domain))
 				return lconn, creds, nil
 			}
 		} else {
-			if err := authenticate(lconn, o.Connection.Domain, creds.Username, creds.Password); err != nil {
-				prt.StoreFailure(creds.StringWithDomain(o.Connection.Domain))
+			if err := authenticate(lconn, domain, creds.Username, creds.Password); err != nil {
+				prt.StoreFailure(creds.StringWithDomain(domain))
 			} else {
-				prt.StoreSuccess(creds.StringWithDomain(o.Connection.Domain))
+				prt.StoreSuccess(creds.StringWithDomain(domain))
 				return lconn, creds, nil
 			}
 		}
@@ -339,7 +344,12 @@ func (o *Options) asreproast(target string) {
 	}
 	defer lclient.Close()
 
-	krb5client, err := kerberos.NewKerberosClient(o.Connection.Domain, target)
+	var domain string = o.Connection.Domain
+	if domain == "" {
+		domain = o.target2SMBInfo[target].Domain
+	}
+
+	krb5client, err := kerberos.NewKerberosClient(domain, target)
 	if err != nil {
 		prt.StoreFailure(err.Error())
 		return
@@ -348,7 +358,7 @@ func (o *Options) asreproast(target string) {
 	krb5client.AuthenticateWithPassword(creds.Username, creds.Password)
 
 	var hashes []string
-	err = FindObjectsWithCallback(lclient, o.Connection.Domain, o.filter, func(m map[string]interface{}) error {
+	err = FindObjectsWithCallback(lclient, domain, o.filter, func(m map[string]interface{}) error {
 		samaccountname, ok := m[SAMAccountName]
 		if !ok {
 			return nil
@@ -392,7 +402,12 @@ func (o *Options) kerberoast(target string) {
 	}
 	defer lclient.Close()
 
-	krb5client, err := kerberos.NewKerberosClient(o.Connection.Domain, target)
+	var domain string = o.Connection.Domain
+	if domain == "" {
+		domain = o.target2SMBInfo[target].Domain
+	}
+
+	krb5client, err := kerberos.NewKerberosClient(domain, target)
 	if err != nil {
 		prt.StoreFailure(err.Error())
 		return
@@ -401,7 +416,7 @@ func (o *Options) kerberoast(target string) {
 	krb5client.AuthenticateWithPassword(creds.Username, creds.Password)
 
 	var hashes []string
-	err = FindObjectsWithCallback(lclient, o.Connection.Domain, o.filter, func(m map[string]interface{}) error {
+	err = FindObjectsWithCallback(lclient, domain, o.filter, func(m map[string]interface{}) error {
 		if len(m) == 0 {
 			return nil
 		}
@@ -465,7 +480,12 @@ func (o *Options) enumeration(target string) {
 		return
 	}
 
-	err = FindObjectsWithCallback(lclient, o.Connection.Domain, o.filter, func(m map[string]interface{}) error {
+	var domain string = o.Connection.Domain
+	if domain == "" {
+		domain = o.target2SMBInfo[target].Domain
+	}
+
+	err = FindObjectsWithCallback(lclient, domain, o.filter, func(m map[string]interface{}) error {
 		var data []string
 		for _, a := range o.attributes {
 			switch a {
