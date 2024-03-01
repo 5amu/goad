@@ -104,7 +104,8 @@ type Options struct {
 	credentials    []utils.Credential
 
 	// Utils for Create
-	ucd UCD
+	createName string
+	createUAC  UserAccountControl
 
 	// Utils for Read
 	filters    []string
@@ -247,14 +248,8 @@ func (o *Options) authenticate(target string) (*ldap.Conn, utils.Credential, err
 
 func (o *Options) parseC() ExecutionFunction {
 	if o.Create.AddComputer != "" {
-		var name string = o.Create.AddComputer
-		if !strings.HasSuffix(o.Create.AddComputer, "$") {
-			name = o.Create.AddComputer + "$"
-		}
-		o.ucd = UCD{
-			SAMAccountName: name,
-			UAC:            WORKSTATION_TRUST_ACCOUNT,
-		}
+		o.createName = o.Create.AddComputer
+		o.createUAC = WORKSTATION_TRUST_ACCOUNT
 		return Create
 	}
 
@@ -315,6 +310,10 @@ func (o *Options) parseR(args []string) ExecutionFunction {
 	for _, a := range args {
 		attr, _ := strings.CutPrefix(a, "--")
 		attr, _ = strings.CutPrefix(attr, "-")
+
+		if attr == "" {
+			continue
+		}
 
 		for _, f := range reflect.VisibleFields(reflect.TypeOf(o.Read)) {
 			var filters []string
@@ -416,11 +415,7 @@ func (o *Options) parseU() ExecutionFunction {
 
 func (o *Options) parseD() ExecutionFunction {
 	if o.Delete.DeleteComputer != "" {
-		var name string = o.Delete.DeleteComputer
-		if !strings.HasSuffix(o.Delete.DeleteComputer, "$") {
-			name = o.Delete.DeleteComputer + "$"
-		}
-		o.deletionName = name
+		o.deletionName = o.Delete.DeleteComputer
 		o.deletionType = DelComputer
 		return Delete
 	}

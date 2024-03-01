@@ -7,13 +7,11 @@ import (
 	"github.com/5amu/goad/pkg/smb"
 )
 
-func getSMBInfo(host string) *smb.SMBInfo {
+func GetSMBInfo(host string) *smb.SMBInfo {
 	data, err := smb.GatherSMBInfo(host)
 	if data == nil || err != nil {
 		return nil
 	}
-	prt := printer.NewPrinter("SMB", host, data.NetBIOSName, 445)
-	prt.PrintInfo(data.String())
 	return data
 }
 
@@ -27,12 +25,14 @@ func GatherSMBInfoToMap(targets []string, port int) map[string]*smb.SMBInfo {
 		wg.Add(1)
 		guard <- struct{}{}
 		go func(s string) {
-			v := getSMBInfo(s)
+			v := GetSMBInfo(s)
 			<-guard
 			if v != nil {
+				prt := printer.NewPrinter("SMB", s, v.NetBIOSName, 445)
 				mapMutex.Lock()
 				ret[s] = v
 				mapMutex.Unlock()
+				prt.PrintInfo(v.String())
 			}
 			wg.Done()
 		}(t)
