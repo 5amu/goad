@@ -46,6 +46,16 @@ var (
 	PARTIAL_SECRETS_ACCOUNT        UserAccountControl = 67108864
 )
 
+// https://learn.microsoft.com/en-us/windows/win32/adschema/a-instancetype
+const (
+	IT_NamingContextHead      uint32 = 1  // The head of naming context
+	IT_ReplicaNotInstanciated uint32 = 2  // This replica is not instantiated
+	IT_Writable               uint32 = 4  // The object is writable on this directory
+	IT_Above                  uint32 = 8  // The naming context above this one on this directory is held
+	IT_Constructed            uint32 = 10 // The naming context is in the process of being constructed for the first time by using replication
+	IT_Removed                uint32 = 20 // The naming context is in the process of being removed from the local DSA
+)
+
 const (
 	FilterIsUser     = "(objectCategory=person)"
 	FilterIsGroup    = "(objectCategory=group)"
@@ -58,8 +68,11 @@ const (
 	SAMAccountName             = "sAMAccountName"
 	ServicePrincipalName       = "servicePrincipalName"
 	ObjectSid                  = "objectSid"
+	ObjectClass                = "objectClass"
+	InstanceType               = "instanceType"
 	AdminCount                 = "adminCount"
 	UAC                        = "userAccountControl:1.2.840.113556.1.4.803:"
+	UACAttr                    = "userAccountControl"
 	DistinguishedName          = "distinguishedName"
 	OperatingSystem            = "operatingSystem"
 	OperatingSystemServicePack = "operatingSystemServicePack"
@@ -69,6 +82,7 @@ const (
 	MemberOf                   = "memberOf"
 	Description                = "description"
 	ManagedPassword            = "msDS-ManagedPassword"
+	UnicodePassword            = "unicodePwd"
 )
 
 func JoinFilters(filters ...string) string {
@@ -103,4 +117,12 @@ func IsLDAP(host string, port int) bool {
 		return false
 	}
 	return res
+}
+
+type UCD struct {
+	DnsHostName    string
+	UAC            UserAccountControl
+	SPNs           []string
+	SAMAccountName string
+	UnicodePwd     string
 }

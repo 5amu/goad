@@ -3,7 +3,11 @@ package utils
 import (
 	"bufio"
 	"fmt"
+	"math/rand"
 	"os"
+	"strings"
+
+	"golang.org/x/text/encoding/unicode"
 )
 
 const DefaultMaxConcurrent = 60
@@ -28,4 +32,19 @@ func WriteLines(lines []string, path string) error {
 		fmt.Fprintln(w, line)
 	}
 	return w.Flush()
+}
+
+func GeneratePassword(n int) string {
+	chars := []rune("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!?_")
+	var b strings.Builder
+	for i := 0; i < n; i++ {
+		b.WriteRune(chars[rand.Intn(len(chars))])
+	}
+	return b.String()
+}
+
+func StringToUTF16(s string) string {
+	pwd := unicode.UTF16(unicode.LittleEndian, unicode.IgnoreBOM)
+	out, _ := pwd.NewEncoder().String(s)
+	return out
 }

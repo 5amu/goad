@@ -133,7 +133,7 @@ func (p *Printer) store(symbol string, msg ...string) {
 	} else {
 		txt = p.config.OutputFormatter(message.String())
 	}
-	p.storage = append(p.storage, fmt.Sprintf("%s%s%s\n", row.String(), symbol, txt))
+	p.storage = append(p.storage, strings.ReplaceAll(strings.ReplaceAll(fmt.Sprintf("%s%s%s", row.String(), symbol, txt), "\n", ""), "\r", "")+"\n")
 }
 
 func (p *Printer) Store(msg ...string) {

@@ -39,6 +39,7 @@ type Options struct {
 
 	// Create
 	Create struct {
+		AddComputer string `long:"add-computer" description:"Create a computer object"`
 	} `group:"Create Options" description:"Create Options"`
 
 	// Read
@@ -86,6 +87,7 @@ type Options struct {
 
 	// Delete
 	Delete struct {
+		DeleteComputer string `long:"del-computer" description:"Delete a computer object"`
 	} `group:"Delete Options" description:"Delete Options"`
 
 	/*
@@ -96,12 +98,24 @@ type Options struct {
 		} `group:"Run Bloodhound Collector v4.2" description:"Run Bloodhound Collector v4.2"`
 	*/
 
+	// Common utils
 	target2SMBInfo map[string]*smb.SMBInfo
-	filters        []string
-	filter         string
-	attributes     []string
 	printMutex     sync.Mutex
 	credentials    []utils.Credential
+
+	// Utils for Create
+	ucd UCD
+
+	// Utils for Read
+	filters    []string
+	filter     string
+	attributes []string
+
+	// Utils for Update
+
+	// Utils for Delete
+	deletionType DeletionType
+	deletionName string
 }
 
 type ExecutionFunction int
@@ -159,8 +173,22 @@ func (o *Options) Run() {
 		return
 	}
 
+	if o.parseC() == Create {
+		o.parallelExecution(o.create)
+		return
+	}
+
 	if o.parseR(os.Args[2:]) == Read {
 		o.parallelExecution(o.read)
+		return
+	}
+
+	if o.parseU() == Update {
+		return
+	}
+
+	if o.parseD() == Delete {
+		o.parallelExecution(o.delete)
 		return
 	}
 
@@ -215,6 +243,22 @@ func (o *Options) authenticate(target string) (*ldap.Conn, utils.Credential, err
 		}
 	}
 	return nil, utils.Credential{}, fmt.Errorf("no valid authentication")
+}
+
+func (o *Options) parseC() ExecutionFunction {
+	if o.Create.AddComputer != "" {
+		var name string = o.Create.AddComputer
+		if !strings.HasSuffix(o.Create.AddComputer, "$") {
+			name = o.Create.AddComputer + "$"
+		}
+		o.ucd = UCD{
+			SAMAccountName: name,
+			UAC:            WORKSTATION_TRUST_ACCOUNT,
+		}
+		return Create
+	}
+
+	return Undefined
 }
 
 func (o *Options) parseR(args []string) ExecutionFunction {
@@ -362,6 +406,23 @@ func (o *Options) parseR(args []string) ExecutionFunction {
 		slices.Sort(o.filters)
 		o.filters = slices.Compact[[]string, string](o.filters)
 		return Read
+	}
+	return Undefined
+}
+
+func (o *Options) parseU() ExecutionFunction {
+	return Undefined
+}
+
+func (o *Options) parseD() ExecutionFunction {
+	if o.Delete.DeleteComputer != "" {
+		var name string = o.Delete.DeleteComputer
+		if !strings.HasSuffix(o.Delete.DeleteComputer, "$") {
+			name = o.Delete.DeleteComputer + "$"
+		}
+		o.deletionName = name
+		o.deletionType = DelComputer
+		return Delete
 	}
 	return Undefined
 }
