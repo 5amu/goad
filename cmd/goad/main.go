@@ -13,16 +13,16 @@ import (
 )
 
 type MainOptions struct {
-	//FTP  optftp.Options  `command:"ftp" description:"own stuff using SMB"`
-	LDAP optldap.Options `command:"ldap" description:"own stuff using LDAP"`
-	KRB5 optkrb5.Options `command:"krb5" description:"own stuff using Kerberos"`
-	//MSSQL optmssql.Options `command:"mssql" description:"own stuff using MSSQL"`
-	//RDP   optrdp.Options   `command:"rdp" description:"own stuff using RDP"`
-	SMB optsmb.Options `command:"smb" description:"own stuff using SMB"`
-	SSH optssh.Options `command:"ssh" description:"own stuff using SSH"`
-	//VNC   optvnc.Options   `command:"vnc" description:"own stuff using VNC"`
-	WINRM optwinrm.Options `command:"winrm" description:"own stuff using WINRM"`
-	//WMI   optwmi.Options   `command:"wmi" description:"own stuff using WMI"`
+	//FTP  optftp.Options  `command:"ftp" description:"Own stuff using SMB"`
+	LDAP optldap.Options `command:"ldap" description:"Own stuff using LDAP"`
+	KRB5 optkrb5.Options `command:"krb5" description:"Own stuff using Kerberos"`
+	//MSSQL optmssql.Options `command:"mssql" description:"Own stuff using MSSQL"`
+	//RDP   optrdp.Options   `command:"rdp" description:"Own stuff using RDP"`
+	SMB optsmb.Options `command:"smb" description:"Own stuff using SMB"`
+	SSH optssh.Options `command:"ssh" description:"Own stuff using SSH"`
+	//VNC   optvnc.Options   `command:"vnc" description:"Own stuff using VNC"`
+	WINRM optwinrm.Options `command:"winrm" description:"Own stuff using WINRM"`
+	//WMI   optwmi.Options   `command:"wmi" description:"Own stuff using WMI"`
 }
 
 func main() {
