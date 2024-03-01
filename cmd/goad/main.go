@@ -42,48 +42,30 @@ func main() {
 	fmt.Println()
 	defer fmt.Println()
 
-	/*if p.Command.Find("ftp") == p.Active {
-		if err := opts.FTP.Run(); err != nil {
-			fmt.Println(err)
-		}
-	} else*/if p.Command.Find("ldap") == p.Active {
-		if err := opts.LDAP.Run(); err != nil {
-			fmt.Println(err)
-		}
-	} else if p.Command.Find("krb5") == p.Active {
-		if err := opts.KRB5.Run(); err != nil {
-			fmt.Println(err)
-		}
-		/*} else if p.Command.Find("mssql") == p.Active {
-			if err := opts.MSSQL.Run(); err != nil {
-				fmt.Println(err)
+	for _, c := range p.Commands() {
+		if p.Find(c.Name) == p.Active {
+			switch c.Name {
+			//case "ftp":
+			//	opts.FTP.Run()
+			//case "mssql":
+			//	opts.MSSQL.Run()
+			//case "rdp":
+			//  opts.RDP.Run()
+			//case "vnc":
+			//  opts.VNC.Run()
+			//case "wmi":
+			//  opts.WMI.Run()
+			case "ldap":
+				opts.LDAP.Run()
+			case "krb5":
+				opts.KRB5.Run()
+			case "smb":
+				opts.SMB.Run()
+			case "ssh":
+				opts.SSH.Run()
+			case "winrm":
+				opts.WINRM.Run()
 			}
-		} else if p.Command.Find("rdp") == p.Active {
-			if err := opts.RDP.Run(); err != nil {
-				fmt.Println(err)
-			}
-		*/
-	} else if p.Command.Find("smb") == p.Active {
-		if err := opts.SMB.Run(); err != nil {
-			fmt.Println(err)
 		}
-	} else if p.Command.Find("ssh") == p.Active {
-		if err := opts.SSH.Run(); err != nil {
-			fmt.Println(err)
-		}
-		/*} else if p.Command.Find("vnc") == p.Active {
-		if err := opts.VNC.Run(); err != nil {
-			fmt.Println(err)
-		}
-		*/
-	} else if p.Command.Find("winrm") == p.Active {
-		if err := opts.WINRM.Run(); err != nil {
-			fmt.Println(err)
-		}
-		/*} else if p.Command.Find("wmi") == p.Active {
-		if err := opts.WMI.Run(); err != nil {
-			fmt.Println(err)
-		}
-		*/
 	}
 }

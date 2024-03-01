@@ -22,7 +22,7 @@ type Options struct {
 	Connection struct {
 		Username    string `short:"u" description:"Provide username (or FILE)"`
 		Password    string `short:"p" description:"Provide password (or FILE)"`
-		NullSession bool   `long:"null-session" description:"authenticate with null credentials"`
+		NullSession bool   `long:"null-session" description:"Authenticate with null credentials"`
 		NTLM        string `short:"H" long:"hashes" description:"Authenticate with NTLM hash"`
 		Domain      string `short:"d" long:"domain" description:"Provide domain"`
 		Port        int    `long:"port" default:"389" description:"Ldap port to contact"`
@@ -43,21 +43,21 @@ type Options struct {
 
 	// Read
 	Read struct {
-		CustomFilter         string `short:"f" long:"filter" description:"bring your own filter"`
-		CustomAttributes     string `short:"a" long:"attributes" description:"ask your attributes (comma separated)"`
-		TrustedForDelegation bool   `long:"trusted-for-delegation" description:"get the list of users and computers with flag TRUSTED_FOR_DELEGATION"`
-		PasswordNotRequired  bool   `long:"password-not-required" description:"get the list of users with flag PASSWD_NOTREQD"`
-		PasswordNeverExpires bool   `long:"password-never-expires" description:"get the list of accounts with flag DONT_EXPIRE_PASSWD"`
-		AdminCount           bool   `long:"admin-count" description:"get objets that had the value adminCount=1"`
-		Users                bool   `long:"users" description:"enumerate enabled domain users"`
-		User                 string `long:"user" description:"find data about a single user"`
-		Computers            bool   `long:"computers" description:"enumerate computers in the domain"`
-		ActiveUsers          bool   `long:"active-users" description:"enumerate active enabled domain users"`
-		Groups               bool   `long:"groups" description:"enumerate domain groups"`
-		DCList               bool   `long:"dc-list" description:"enumerate Domain Controllers"`
-		GetSID               bool   `long:"get-sid" description:"get domain sid"`
-		GMSA                 bool   `long:"gmsa" description:"enumerate GMSA passwords"`
-		Not                  bool   `long:"not" description:"negate next filter"`
+		CustomFilter         string `short:"f" long:"filter" description:"Bring your own filter"`
+		CustomAttributes     string `short:"a" long:"attributes" description:"Ask your attributes (comma separated)"`
+		TrustedForDelegation bool   `long:"trusted-for-delegation" description:"Get the list of users and computers with flag TRUSTED_FOR_DELEGATION"`
+		PasswordNotRequired  bool   `long:"password-not-required" description:"Get the list of users with flag PASSWD_NOTREQD"`
+		PasswordNeverExpires bool   `long:"password-never-expires" description:"Get the list of accounts with flag DONT_EXPIRE_PASSWD"`
+		AdminCount           bool   `long:"admin-count" description:"Get objets that had the value adminCount=1"`
+		Users                bool   `long:"users" description:"Enumerate enabled domain users"`
+		User                 string `long:"user" description:"Find data about a single user"`
+		Computers            bool   `long:"computers" description:"Enumerate computers in the domain"`
+		ActiveUsers          bool   `long:"active-users" description:"Enumerate active enabled domain users"`
+		Groups               bool   `long:"groups" description:"Enumerate domain groups"`
+		DCList               bool   `long:"dc-list" description:"Enumerate Domain Controllers"`
+		GetSID               bool   `long:"get-sid" description:"Get domain sid"`
+		GMSA                 bool   `long:"gmsa" description:"Enumerate GMSA passwords"`
+		Not                  bool   `long:"not" description:"Negate next filter"`
 	} `group:"Read Options" description:"Read Options"`
 
 	// Update
@@ -112,7 +112,7 @@ func (o *Options) parallelExecution(runner func(string)) {
 	wg.Wait()
 }
 
-func (o *Options) Run() (err error) {
+func (o *Options) Run() {
 	o.target2SMBInfo = utils.GatherSMBInfoToMap(
 		utils.ExtractTargets(o.Targets.TARGETS),
 		o.Connection.Port,
@@ -130,21 +130,21 @@ func (o *Options) Run() (err error) {
 	switch o.parseH() {
 	case Asreproast:
 		o.parallelExecution(o.asreproast)
-		return nil
+		return
 	case Kerberoast:
 		o.parallelExecution(o.kerberoast)
-		return nil
+		return
 	}
 
 	if o.parseR(os.Args[2:]) == Enumeration {
 		o.parallelExecution(o.read)
-		return nil
+		return
 	}
 
 	o.parallelExecution(func(s string) {
 		_, _, _ = o.authenticate(s)
 	})
-	return nil
+	return
 }
 
 func (o *Options) authenticate(target string) (*ldap.Conn, utils.Credential, error) {
