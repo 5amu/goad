@@ -43,21 +43,41 @@ type Options struct {
 
 	// Read
 	Read struct {
-		CustomFilter         string `short:"f" long:"filter" description:"Bring your own filter"`
-		CustomAttributes     string `short:"a" long:"attributes" description:"Ask your attributes (comma separated)"`
-		TrustedForDelegation bool   `long:"trusted-for-delegation" description:"Get the list of users and computers with flag TRUSTED_FOR_DELEGATION"`
-		PasswordNotRequired  bool   `long:"password-not-required" description:"Get the list of users with flag PASSWD_NOTREQD"`
-		PasswordNeverExpires bool   `long:"password-never-expires" description:"Get the list of accounts with flag DONT_EXPIRE_PASSWD"`
-		AdminCount           bool   `long:"admin-count" description:"Get objets that had the value adminCount=1"`
-		Users                bool   `long:"users" description:"Enumerate enabled domain users"`
-		User                 string `long:"user" description:"Find data about a single user"`
-		Computers            bool   `long:"computers" description:"Enumerate computers in the domain"`
-		ActiveUsers          bool   `long:"active-users" description:"Enumerate active enabled domain users"`
-		Groups               bool   `long:"groups" description:"Enumerate domain groups"`
-		DCList               bool   `long:"dc-list" description:"Enumerate Domain Controllers"`
-		GetSID               bool   `long:"get-sid" description:"Get domain sid"`
-		GMSA                 bool   `long:"gmsa" description:"Enumerate GMSA passwords"`
-		Not                  bool   `long:"not" description:"Negate next filter"`
+		CustomFilter     string `short:"f" long:"filter" description:"Bring your own filter"`
+		CustomAttributes string `short:"a" long:"attributes" description:"Ask your attributes (comma separated)"`
+
+		Script                     bool `long:"script" description:"Filter for objects with flag SCRIPT"`
+		Disabled                   bool `long:"disabled" description:"Filter for objects with flag ACCOUNTDISABLE"`
+		HomedirRequired            bool `long:"homedir-required" description:"Filter for objects with flag HOMEDIR_REQUIRED"`
+		Lockout                    bool `long:"lockout" description:"Filter for objects with flag LOCKOUT"`
+		PasswordNotRequired        bool `long:"password-not-required" description:"Filter for objects with flag PASSWD_NOTREQD"`
+		PasswordCantChange         bool `long:"password-cant-change" description:"Filter for objects with flag PASSWD_CANT_CHANGE"`
+		EncryptedTextPwdAllowed    bool `long:"encrypted-text-pwd-allowed" description:"Filter for objects with flag ENCRYPTED_TEXT_PWD_ALLOWED"`
+		TempDuplicateAccount       bool `long:"temp-duplicate-account" description:"Filter for objects with flag TEMP_DUPLICATE_ACCOUNT"`
+		NormalAccount              bool `long:"normal-account" description:"Filter for objects with flag NORMAL_ACCOUNT"`
+		InterdomainTrustAccount    bool `long:"interdomain-trust-account" description:"Filter for objects with flag INTERDOMAIN_TRUST_ACCOUNT"`
+		WorkstationTrustAccount    bool `long:"workstation-trust-account" description:"Filter for objects with flag WORKSTATION_TRUST_ACCOUNT"`
+		ServerTrustAccount         bool `long:"server-trust-account" description:"Filter for objects with flag SERVER_TRUST_ACCOUNT"`
+		DontExpirePassword         bool `long:"password-never-expires" description:"Filter for objects with flag DONT_EXPIRE_PASSWD"`
+		MNSLogonAccount            bool `long:"mns-logon-account" description:"Filter for objects with flag MNS_LOGON_ACCOUNT"`
+		SmartcardRequired          bool `long:"smartcard-required" description:"Filter for objects with flag SMARTCARD_REQUIRED"`
+		TrustedForDelegation       bool `long:"trusted-for-delegation" description:"Filter for objects with flag TRUSTED_FOR_DELEGATION"`
+		NotDelegated               bool `long:"not-delegated" description:"Filter for objects with flag NOT_DELEGATED"`
+		UseDESKeyOnly              bool `long:"use-des-key-only" description:"Filter for objects with flag USE_DES_KEY_ONLY"`
+		DontRequirePreauth         bool `long:"dont-require-preauth" description:"Filter for objects with flag DONT_REQ_PREAUTH"`
+		PasswordExpired            bool `long:"password-expired" description:"Filter for objects with flag PASSWORD_EXPIRED"`
+		TrustedToAuthForDelegation bool `long:"trusted-to-auth-for-delegation" description:"Filter for objects with flag TRUSTED_TO_AUTH_FOR_DELEGATION"`
+		PartialSecretsAccount      bool `long:"partial-secrets-account" description:"Filter for objects with flag PARTIAL_SECRETS_ACCOUNT"`
+
+		AdminCount  bool   `long:"admin-count" description:"Enumerate objects that have an adminCount"`
+		Computers   bool   `long:"computers" description:"Enumerate objects that are computers"`
+		Groups      bool   `long:"groups" description:"Enumerate objects that are domain groups"`
+		Users       bool   `long:"users" description:"Enumerate objects that are enabled domain users"`
+		ActiveUsers bool   `long:"active-users" description:"Enumerate objects that are active enabled domain users"`
+		User        string `long:"user" description:"Get data about a single user"`
+		GetSID      bool   `long:"sid" description:"Get domain SID"`
+		GMSA        bool   `long:"gmsa" description:"Get GMSA passwords"`
+		Not         bool   `long:"not" description:"Negate next filter"`
 	} `group:"Read Options" description:"Read Options"`
 
 	// Update
@@ -88,7 +108,10 @@ type ExecutionFunction int
 
 const (
 	Undefined ExecutionFunction = iota
-	Enumeration
+	Create
+	Read
+	Update
+	Delete
 	Kerberoast
 	Asreproast
 )
@@ -136,7 +159,7 @@ func (o *Options) Run() {
 		return
 	}
 
-	if o.parseR(os.Args[2:]) == Enumeration {
+	if o.parseR(os.Args[2:]) == Read {
 		o.parallelExecution(o.read)
 		return
 	}
@@ -198,13 +221,13 @@ func (o *Options) parseR(args []string) ExecutionFunction {
 	if o.Read.GetSID {
 		o.filters = []string{UACFilter(SERVER_TRUST_ACCOUNT)}
 		o.attributes = []string{ObjectSid}
-		return Enumeration
+		return Read
 	}
 
 	if o.Read.GMSA {
 		o.filters = []string{FilterGMSA}
 		o.attributes = []string{SAMAccountName, ManagedPassword}
-		return Enumeration
+		return Read
 	}
 
 	tmp := strings.Split(o.Read.CustomAttributes, ",")
@@ -254,28 +277,67 @@ func (o *Options) parseR(args []string) ExecutionFunction {
 			switch attr {
 			case f.Tag.Get("long"), f.Tag.Get("short"):
 				switch f.Name {
-				case "TrustedForDelegation":
-					filters = []string{UACFilter(TRUSTED_FOR_DELEGATION)}
-				case "User":
-					filters = []string{FilterIsUser, NewFilter(SAMAccountName, o.Read.User)}
-				case "Users":
-					filters = []string{FilterIsUser}
-				case "PasswordNotRequired":
-					filters = []string{UACFilter(PASSWD_NOTREQD)}
-				case "PasswordNeverExpires":
-					filters = []string{UACFilter(DONT_EXPIRE_PASSWORD)}
-				case "ActiveUsers":
-					filters = []string{FilterIsUser, NegativeFilter(UACFilter(ACCOUNTDISABLE))}
 				case "CustomFilter":
 					filters = []string{o.Read.CustomFilter}
+
+				case "Script":
+					filters = []string{UACFilter(SCRIPT)}
+				case "Disabled":
+					filters = []string{UACFilter(ACCOUNTDISABLE)}
+				case "HomedirRequired":
+					filters = []string{UACFilter(HOMEDIR_REQUIRED)}
+				case "Lockout":
+					filters = []string{UACFilter(LOCKOUT)}
+				case "PasswordNotRequired":
+					filters = []string{UACFilter(PASSWD_NOTREQD)}
+				case "PasswordCantChange":
+					filters = []string{UACFilter(PASSWD_CANT_CHANGE)}
+				case "EncryptedTextPwdAllowed":
+					filters = []string{UACFilter(ENCRYPTED_TEXT_PWD_ALLOWED)}
+				case "TempDuplicateAccount":
+					filters = []string{UACFilter(TEMP_DUPLICATE_ACCOUNT)}
+				case "NormalAccount":
+					filters = []string{UACFilter(NORMAL_ACCOUNT)}
+				case "InterdomainTrustAccount":
+					filters = []string{UACFilter(INTERDOMAIN_TRUST_ACCOUNT)}
+				case "WorkstationTrustAccount":
+					filters = []string{UACFilter(WORKSTATION_TRUST_ACCOUNT)}
+				case "ServerTrustAccount":
+					filters = []string{UACFilter(SERVER_TRUST_ACCOUNT)}
+				case "DontExpirePassword":
+					filters = []string{UACFilter(DONT_EXPIRE_PASSWORD)}
+				case "MNSLogonAccount":
+					filters = []string{UACFilter(MNS_LOGON_ACCOUNT)}
+				case "SmartcardRequired":
+					filters = []string{UACFilter(SMARTCARD_REQUIRED)}
+				case "TrustedForDelegation":
+					filters = []string{UACFilter(TRUSTED_FOR_DELEGATION)}
+				case "NotDelegated":
+					filters = []string{UACFilter(NOT_DELEGATED)}
+				case "UseDESKeyOnly":
+					filters = []string{UACFilter(USE_DES_KEY_ONLY)}
+				case "DontRequirePreauth":
+					filters = []string{UACFilter(DONT_REQ_PREAUTH)}
+				case "PasswordExpired":
+					filters = []string{UACFilter(PASSWORD_EXPIRED)}
+				case "TrustedToAuthForDelegation":
+					filters = []string{UACFilter(TRUSTED_TO_AUTH_FOR_DELEGATION)}
+				case "PartialSecretsAccount":
+					filters = []string{UACFilter(PARTIAL_SECRETS_ACCOUNT)}
+
 				case "AdminCount":
 					filters = []string{FilterIsAdmin}
-				case "Groups":
-					filters = []string{FilterIsGroup}
-				case "DCList":
-					filters = []string{NegativeFilter(UACFilter(ACCOUNTDISABLE)), UACFilter(SERVER_TRUST_ACCOUNT)}
 				case "Computers":
 					filters = []string{FilterIsComputer}
+				case "Groups":
+					filters = []string{FilterIsGroup}
+				case "Users":
+					filters = []string{FilterIsUser}
+				case "ActiveUsers":
+					filters = []string{FilterIsUser, NegativeFilter(UACFilter(ACCOUNTDISABLE))}
+				case "User":
+					filters = []string{FilterIsUser, NewFilter(SAMAccountName, o.Read.User)}
+
 				case "Not":
 					nextNegated = true
 				default:
@@ -299,7 +361,7 @@ func (o *Options) parseR(args []string) ExecutionFunction {
 	if len(o.filters) > 0 {
 		slices.Sort(o.filters)
 		o.filters = slices.Compact[[]string, string](o.filters)
-		return Enumeration
+		return Read
 	}
 	return Undefined
 }
