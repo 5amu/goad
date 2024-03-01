@@ -2,13 +2,13 @@ package optldap
 
 import (
 	"fmt"
+	"os"
+	"reflect"
 	"strings"
 	"sync"
 
 	"github.com/5amu/goad/internal/printer"
 	"github.com/5amu/goad/internal/utils"
-	"github.com/5amu/goad/pkg/kerberos"
-	"github.com/5amu/goad/pkg/mstypes"
 	"github.com/5amu/goad/pkg/smb"
 	"github.com/go-ldap/ldap/v3"
 )
@@ -17,11 +17,6 @@ type Options struct {
 	Targets struct {
 		TARGETS []string `description:"Provide target IP/FQDN/FILE"`
 	} `positional-args:"yes"`
-
-	CustomQuery struct {
-		SearchFilter string `short:"f" long:"filter" description:"Bring your own filter"`
-		Attributes   string `short:"a" long:"attributes" description:"Ask your attributes (comma separated)"`
-	}
 
 	Connection struct {
 		Username    string `short:"u" description:"Provide username (or FILE)"`
@@ -38,20 +33,39 @@ type Options struct {
 		Kerberoast string `long:"kerberoast" description:"Grab TGS ticket(s) parsed to be cracked with hashcat"`
 	} `group:"Hash Retrieval Options" description:"Hash Retrieval Options"`
 
-	Enum struct {
-		TrustedForDelegation bool   `long:"trusted-for-delegation" description:"Get the list of users and computers with flag TRUSTED_FOR_DELEGATION"`
-		PasswordNotRequired  bool   `long:"password-not-required" description:"Get the list of users with flag PASSWD_NOTREQD"`
-		PasswordNeverExpires bool   `long:"password-never-expires" description:"Get the list of accounts with flag DONT_EXPIRE_PASSWD"`
-		AdminCount           bool   `long:"admin-count" description:"Get objets that had the value adminCount=1"`
-		Users                bool   `long:"users" description:"Enumerate enabled domain users"`
-		User                 string `long:"user" description:"Find data about a single user"`
-		Computers            bool   `long:"computers" description:"Enumerate computers in the domain"`
-		ActiveUsers          bool   `long:"active-users" description:"Enumerate active enabled domain users"`
-		Groups               bool   `long:"groups" description:"Enumerate domain groups"`
-		DCList               bool   `long:"dc-list" description:"Enumerate Domain Controllers"`
-		GetSID               bool   `long:"get-sid" description:"Get domain sid"`
-		GMSA                 bool   `long:"gmsa" description:"Enumerate GMSA passwords"`
-	} `group:"Enumeration Options" description:"Enumeration Options"`
+	// CRUD
+	// Create / Read / Update / Delete
+
+	// Create
+	Create struct {
+	} `group:"Create Options" description:"Create Options"`
+
+	// Read
+	Read struct {
+		CustomFilter         string `short:"f" long:"filter" description:"bring your own filter"`
+		CustomAttributes     string `short:"a" long:"attributes" description:"ask your attributes (comma separated)"`
+		TrustedForDelegation bool   `long:"trusted-for-delegation" description:"get the list of users and computers with flag TRUSTED_FOR_DELEGATION"`
+		PasswordNotRequired  bool   `long:"password-not-required" description:"get the list of users with flag PASSWD_NOTREQD"`
+		PasswordNeverExpires bool   `long:"password-never-expires" description:"get the list of accounts with flag DONT_EXPIRE_PASSWD"`
+		AdminCount           bool   `long:"admin-count" description:"get objets that had the value adminCount=1"`
+		Users                bool   `long:"users" description:"enumerate enabled domain users"`
+		User                 string `long:"user" description:"find data about a single user"`
+		Computers            bool   `long:"computers" description:"enumerate computers in the domain"`
+		ActiveUsers          bool   `long:"active-users" description:"enumerate active enabled domain users"`
+		Groups               bool   `long:"groups" description:"enumerate domain groups"`
+		DCList               bool   `long:"dc-list" description:"enumerate Domain Controllers"`
+		GetSID               bool   `long:"get-sid" description:"get domain sid"`
+		GMSA                 bool   `long:"gmsa" description:"enumerate GMSA passwords"`
+		Not                  bool   `long:"not" description:"negate next filter"`
+	} `group:"Read Options" description:"Read Options"`
+
+	// Update
+	Update struct {
+	} `group:"Update Options" description:"Update Options"`
+
+	// Delete
+	Delete struct {
+	} `group:"Delete Options" description:"Delete Options"`
 
 	/*
 		BH struct {
@@ -78,132 +92,12 @@ const (
 	Asreproast
 )
 
-func (o *Options) getFunction() ExecutionFunction {
-	if o.Hashes.AsrepRoast != "" {
-		o.filter = JoinFilters(
-			FilterIsUser,
-			UACFilter(DONT_REQ_PREAUTH),
-		)
-		return Asreproast
-	}
-
-	if o.Hashes.Kerberoast != "" {
-		o.filter = JoinFilters(
-			FilterIsUser,
-			NegativeFilter(UACFilter(ACCOUNTDISABLE)),
-		)
-		return Kerberoast
-	}
-
-	var function ExecutionFunction = Undefined
-
-	if o.Enum.GetSID {
-		o.filters = []string{UACFilter(SERVER_TRUST_ACCOUNT)}
-		o.attributes = []string{ObjectSid}
-		return Enumeration
-	}
-
-	if o.Enum.GMSA {
-		o.filters = []string{FilterGMSA}
-		o.attributes = []string{SAMAccountName, ManagedPassword}
-		return Enumeration
-	}
-
-	if o.Enum.TrustedForDelegation {
-		o.filters = append(
-			o.filters,
-			FilterIsUser,
-			NegativeFilter(UACFilter(ACCOUNTDISABLE)),
-			UACFilter(TRUSTED_FOR_DELEGATION),
-		)
-		function = Enumeration
-	}
-
-	if o.Enum.PasswordNotRequired {
-		o.filters = append(
-			o.filters,
-			FilterIsUser,
-			NegativeFilter(UACFilter(ACCOUNTDISABLE)),
-			UACFilter(PASSWD_NOTREQD),
-		)
-		function = Enumeration
-	}
-
-	if o.Enum.Users {
-		o.filters = append(o.filters, FilterIsUser)
-		function = Enumeration
-	}
-
-	if o.Enum.Computers {
-		o.filters = append(o.filters, FilterIsComputer)
-		function = Enumeration
-	}
-
-	if o.Enum.User != "" {
-		o.filters = append(
-			o.filters,
-			FilterIsUser,
-			NewFilter(SAMAccountName, o.Enum.User),
-		)
-		function = Enumeration
-	}
-
-	if o.Enum.ActiveUsers {
-		o.filters = append(
-			o.filters,
-			FilterIsUser,
-			NegativeFilter(UACFilter(ACCOUNTDISABLE)),
-		)
-		function = Enumeration
-	}
-
-	if o.Enum.Groups {
-		o.filters = append(o.filters, FilterIsGroup)
-		function = Enumeration
-	}
-
-	if o.Enum.DCList {
-		o.filters = append(
-			o.filters,
-			FilterIsComputer,
-			NegativeFilter(UACFilter(ACCOUNTDISABLE)),
-			UACFilter(SERVER_TRUST_ACCOUNT),
-		)
-		function = Enumeration
-	}
-
-	if o.Enum.PasswordNeverExpires {
-		o.filters = append(
-			o.filters,
-			FilterIsUser,
-			NegativeFilter(UACFilter(ACCOUNTDISABLE)),
-			UACFilter(DONT_EXPIRE_PASSWORD),
-		)
-		function = Enumeration
-	}
-
-	if o.Enum.AdminCount {
-		o.filters = append(
-			o.filters,
-			FilterIsUser,
-			NegativeFilter(UACFilter(ACCOUNTDISABLE)),
-			FilterIsAdmin,
-		)
-		function = Enumeration
-	}
-
-	if o.CustomQuery.SearchFilter != "" {
-		o.filters = append(
-			o.filters,
-			o.CustomQuery.SearchFilter,
-		)
-		function = Enumeration
-	}
-	return function
-}
-
 func (o *Options) parallelExecution(runner func(string)) {
-	o.filter = JoinFilters(o.filters...)
+	if len(o.filters) == 1 {
+		o.filter = o.filters[0]
+	} else {
+		o.filter = JoinFilters(o.filters...)
+	}
 	var wg sync.WaitGroup
 	for target := range o.target2SMBInfo {
 		wg.Add(1)
@@ -232,56 +126,23 @@ func (o *Options) Run() (err error) {
 		)
 	}
 
-	tmp := strings.Split(o.CustomQuery.Attributes, ",")
-	for _, a := range tmp {
-		switch strings.ToLower(a) {
-		case strings.ToLower(SAMAccountName), "name":
-			o.attributes = append(o.attributes, SAMAccountName)
-		case strings.ToLower(ServicePrincipalName), "spn":
-			o.attributes = append(o.attributes, ServicePrincipalName)
-		case strings.ToLower(ObjectSid):
-			o.attributes = append(o.attributes, ObjectSid)
-		case strings.ToLower(AdminCount):
-			o.attributes = append(o.attributes, AdminCount)
-		case strings.ToLower(DistinguishedName), "dn":
-			o.attributes = append(o.attributes, DistinguishedName)
-		case strings.ToLower(OperatingSystem):
-			o.attributes = append(o.attributes, OperatingSystem)
-		case strings.ToLower(OperatingSystemServicePack):
-			o.attributes = append(o.attributes, OperatingSystemServicePack)
-		case strings.ToLower(OperatingSystemVersion):
-			o.attributes = append(o.attributes, OperatingSystemVersion)
-		case strings.ToLower(PasswordLastSet):
-			o.attributes = append(o.attributes, PasswordLastSet)
-		case strings.ToLower(LastLogon):
-			o.attributes = append(o.attributes, LastLogon)
-		case strings.ToLower(MemberOf):
-			o.attributes = append(o.attributes, MemberOf)
-		case strings.ToLower(Description):
-			o.attributes = append(o.attributes, Description)
-		case strings.ToLower(ManagedPassword):
-			o.attributes = append(o.attributes, ManagedPassword)
-		case "":
-			o.attributes = []string{SAMAccountName, Description}
-		default:
-			o.attributes = append(o.attributes, a)
-		}
-	}
-
-	switch o.getFunction() {
+	switch o.parseH() {
 	case Asreproast:
 		o.parallelExecution(o.asreproast)
+		return nil
 	case Kerberoast:
 		o.parallelExecution(o.kerberoast)
-	case Enumeration:
-		o.parallelExecution(o.enumeration)
-	case Undefined:
-		o.parallelExecution(func(s string) {
-			_, _, _ = o.authenticate(s)
-		})
-	default:
 		return nil
 	}
+
+	if o.parseR(os.Args[2:]) == Enumeration {
+		o.parallelExecution(o.read)
+		return nil
+	}
+
+	o.parallelExecution(func(s string) {
+		_, _, _ = o.authenticate(s)
+	})
 	return nil
 }
 
@@ -333,179 +194,128 @@ func (o *Options) authenticate(target string) (*ldap.Conn, utils.Credential, err
 	return nil, utils.Credential{}, fmt.Errorf("no valid authentication")
 }
 
-func (o *Options) asreproast(target string) {
-	prt := printer.NewPrinter("LDAP", target, o.target2SMBInfo[target].NetBIOSName, o.Connection.Port)
-	defer prt.PrintStored(&o.printMutex)
-
-	lclient, creds, err := o.authenticate(target)
-	if err != nil {
-		prt.StoreFailure(err.Error())
-		return
-	}
-	defer lclient.Close()
-
-	var domain string = o.Connection.Domain
-	if domain == "" {
-		domain = o.target2SMBInfo[target].Domain
+func (o *Options) parseR(args []string) ExecutionFunction {
+	if o.Read.GetSID {
+		o.filters = []string{UACFilter(SERVER_TRUST_ACCOUNT)}
+		o.attributes = []string{ObjectSid}
+		return Enumeration
 	}
 
-	krb5client, err := kerberos.NewKerberosClient(domain, target)
-	if err != nil {
-		prt.StoreFailure(err.Error())
-		return
+	if o.Read.GMSA {
+		o.filters = []string{FilterGMSA}
+		o.attributes = []string{SAMAccountName, ManagedPassword}
+		return Enumeration
 	}
 
-	krb5client.AuthenticateWithPassword(creds.Username, creds.Password)
-
-	var hashes []string
-	err = FindObjectsWithCallback(lclient, domain, o.filter, func(m map[string]interface{}) error {
-		samaccountname, ok := m[SAMAccountName]
-		if !ok {
-			return nil
+	tmp := strings.Split(o.Read.CustomAttributes, ",")
+	for _, a := range tmp {
+		switch strings.ToLower(a) {
+		case strings.ToLower(SAMAccountName), "name":
+			o.attributes = append(o.attributes, SAMAccountName)
+		case strings.ToLower(ServicePrincipalName), "spn":
+			o.attributes = append(o.attributes, ServicePrincipalName)
+		case strings.ToLower(ObjectSid):
+			o.attributes = append(o.attributes, ObjectSid)
+		case strings.ToLower(AdminCount):
+			o.attributes = append(o.attributes, AdminCount)
+		case strings.ToLower(DistinguishedName), "dn":
+			o.attributes = append(o.attributes, DistinguishedName)
+		case strings.ToLower(OperatingSystem):
+			o.attributes = append(o.attributes, OperatingSystem)
+		case strings.ToLower(OperatingSystemServicePack):
+			o.attributes = append(o.attributes, OperatingSystemServicePack)
+		case strings.ToLower(OperatingSystemVersion):
+			o.attributes = append(o.attributes, OperatingSystemVersion)
+		case strings.ToLower(PasswordLastSet):
+			o.attributes = append(o.attributes, PasswordLastSet)
+		case strings.ToLower(LastLogon):
+			o.attributes = append(o.attributes, LastLogon)
+		case strings.ToLower(MemberOf):
+			o.attributes = append(o.attributes, MemberOf)
+		case strings.ToLower(Description):
+			o.attributes = append(o.attributes, Description)
+		case strings.ToLower(ManagedPassword):
+			o.attributes = append(o.attributes, ManagedPassword)
+		case "":
+			o.attributes = []string{SAMAccountName, Description}
+		default:
+			o.attributes = append(o.attributes, a)
 		}
-		name := UnpackToString(samaccountname)
-		asrep, err := krb5client.GetAsReqTgt(name)
-		if err != nil {
-			return err
+	}
+
+	var nextNegated bool = false
+
+	for _, a := range args {
+		attr, _ := strings.CutPrefix(a, "--")
+		attr, _ = strings.CutPrefix(attr, "-")
+
+		for _, f := range reflect.VisibleFields(reflect.TypeOf(o.Read)) {
+			var filters []string
+			switch attr {
+			case f.Tag.Get("long"), f.Tag.Get("short"):
+				switch f.Name {
+				case "TrustedForDelegation":
+					filters = []string{UACFilter(TRUSTED_FOR_DELEGATION)}
+				case "User":
+					filters = []string{FilterIsUser, NewFilter(SAMAccountName, o.Read.User)}
+				case "Users":
+					filters = []string{FilterIsUser}
+				case "PasswordNotRequired":
+					filters = []string{UACFilter(PASSWD_NOTREQD)}
+				case "PasswordNeverExpires":
+					filters = []string{UACFilter(DONT_EXPIRE_PASSWORD)}
+				case "ActiveUsers":
+					filters = []string{FilterIsUser, NegativeFilter(UACFilter(ACCOUNTDISABLE))}
+				case "CustomFilter":
+					filters = []string{o.Read.CustomFilter}
+				case "AdminCount":
+					filters = []string{FilterIsAdmin}
+				case "Groups":
+					filters = []string{FilterIsGroup}
+				case "DCList":
+					filters = []string{NegativeFilter(UACFilter(ACCOUNTDISABLE)), UACFilter(SERVER_TRUST_ACCOUNT)}
+				case "Computers":
+					filters = []string{FilterIsComputer}
+				case "Not":
+					nextNegated = true
+				default:
+					continue
+				}
+			}
+			if len(filters) != 0 {
+				if nextNegated {
+					if len(filters) == 1 {
+						o.filters = append(o.filters, NegativeFilter(filters[0]))
+					} else {
+						o.filters = append(o.filters, NegativeFilter(JoinFilters(filters...)))
+					}
+					nextNegated = false
+				} else {
+					o.filters = append(o.filters, filters...)
+				}
+			}
 		}
-		hash := kerberos.ASREPToHashcat(*asrep.Ticket)
-		prt.Store(name, fmt.Sprintf("%s...%s", hash[:30], hash[len(hash)-10:]))
-		hashes = append(hashes, hash)
-		return nil
-	}, SAMAccountName)
-
-	if err != nil {
-		prt.StoreFailure(err.Error())
-		return
 	}
-
-	if len(hashes) == 0 {
-		return
+	if len(o.filters) > 0 {
+		return Enumeration
 	}
-
-	prt.Store("Saving hashes to", o.Hashes.AsrepRoast)
-	err = utils.WriteLines(hashes, o.Hashes.AsrepRoast)
-	if err != nil {
-		prt.StoreFailure(err.Error())
-		return
-	}
+	return Undefined
 }
 
-func (o *Options) kerberoast(target string) {
-	prt := printer.NewPrinter("LDAP", target, o.target2SMBInfo[target].NetBIOSName, o.Connection.Port)
-	defer prt.PrintStored(&o.printMutex)
-
-	lclient, creds, err := o.authenticate(target)
-	if err != nil {
-		prt.StoreFailure(err.Error())
-		return
+func (o *Options) parseH() ExecutionFunction {
+	if o.Hashes.AsrepRoast != "" {
+		o.filter = JoinFilters(
+			FilterIsUser,
+			UACFilter(DONT_REQ_PREAUTH),
+		)
+		return Asreproast
 	}
-	defer lclient.Close()
-
-	var domain string = o.Connection.Domain
-	if domain == "" {
-		domain = o.target2SMBInfo[target].Domain
+	if o.Hashes.Kerberoast != "" {
+		o.filter = JoinFilters(
+			FilterIsUser,
+			NegativeFilter(UACFilter(ACCOUNTDISABLE)),
+		)
+		return Kerberoast
 	}
-
-	krb5client, err := kerberos.NewKerberosClient(domain, target)
-	if err != nil {
-		prt.StoreFailure(err.Error())
-		return
-	}
-
-	krb5client.AuthenticateWithPassword(creds.Username, creds.Password)
-
-	var hashes []string
-	err = FindObjectsWithCallback(lclient, domain, o.filter, func(m map[string]interface{}) error {
-		if len(m) == 0 {
-			return nil
-		}
-
-		spnsToUnpack, ok := m[ServicePrincipalName]
-		if !ok {
-			return nil
-		}
-		spns := UnpackToSlice(spnsToUnpack)
-
-		for i, spn := range spns {
-			samaccountname, ok := m[SAMAccountName]
-			if !ok {
-				break
-			}
-			name := UnpackToString(samaccountname)
-
-			tgs, err := krb5client.GetServiceTicket(name, spn)
-			if err != nil {
-				return err
-			}
-
-			hash := kerberos.TGSToHashcat(tgs.Ticket, name)
-			prt.Store(name, fmt.Sprintf("%s...%s", hash[:30], hash[len(hash)-10:]))
-
-			if i == 0 {
-				hashes = append(hashes, hash)
-			}
-		}
-		return nil
-
-	}, SAMAccountName, ServicePrincipalName)
-	if err != nil {
-		prt.StoreFailure(err.Error())
-		return
-	}
-
-	if len(hashes) == 0 {
-		return
-	}
-
-	prt.Store("Saving hashes to", o.Hashes.Kerberoast)
-	err = utils.WriteLines(hashes, o.Hashes.Kerberoast)
-	if err != nil {
-		prt.StoreFailure(err.Error())
-	}
-}
-
-func (o *Options) enumeration(target string) {
-	prt := printer.NewPrinter("LDAP", target, o.target2SMBInfo[target].NetBIOSName, o.Connection.Port)
-	defer prt.PrintStored(&o.printMutex)
-
-	lclient, _, err := o.authenticate(target)
-	if err != nil {
-		prt.StoreFailure(err.Error())
-		return
-	}
-	defer lclient.Close()
-
-	if o.filter == "" {
-		return
-	}
-
-	var domain string = o.Connection.Domain
-	if domain == "" {
-		domain = o.target2SMBInfo[target].Domain
-	}
-
-	err = FindObjectsWithCallback(lclient, domain, o.filter, func(m map[string]interface{}) error {
-		var data []string
-		for _, a := range o.attributes {
-			switch a {
-			case LastLogon, PasswordLastSet:
-				data = append(data, DecodeADTimestamp(UnpackToString(m[a])))
-			case ObjectSid:
-				data = append(data, DecodeSID(UnpackToString(m[a])))
-			case ManagedPassword:
-				d := UnpackToString(m[ManagedPassword])
-				blob := mstypes.NewMSDSManagedPasswordBlob([]byte(d))
-				data = append(data, mstypes.HashDataNTLM(blob.CurrentPassword))
-			default:
-				data = append(data, UnpackToString(m[a]))
-			}
-		}
-		prt.Store(data...)
-		return nil
-	}, o.attributes...)
-	if err != nil {
-		prt.StoreFailure(err.Error())
-		return
-	}
+	return Undefined
 }
