@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"reflect"
+	"slices"
 	"strings"
 	"sync"
 
@@ -297,6 +298,8 @@ func (o *Options) parseR(args []string) ExecutionFunction {
 		}
 	}
 	if len(o.filters) > 0 {
+		slices.Sort(o.filters)
+		o.filters = slices.Compact[[]string, string](o.filters)
 		return Enumeration
 	}
 	return Undefined
