@@ -61,7 +61,7 @@ func gatherSSHBanner2Map(mutex *sync.Mutex, targets []string, port int) map[stri
 	return res
 }
 
-func (o *Options) Run() error {
+func (o *Options) Run() {
 	o.targets = utils.ExtractTargets(o.Targets.TARGETS)
 	o.credentials = utils.NewCredentialsClusterBomb(
 		utils.ExtractLinesFromFileOrString(o.Connection.Username),
@@ -77,7 +77,7 @@ func (o *Options) Run() error {
 	} else if o.Mode.Shell {
 		f = o.shell
 	} else {
-		return nil
+		return
 	}
 
 	var wg sync.WaitGroup
@@ -89,7 +89,6 @@ func (o *Options) Run() error {
 		}(target)
 	}
 	wg.Wait()
-	return nil
 }
 
 func (o *Options) authenticate(target string) (*ssh.Client, error) {

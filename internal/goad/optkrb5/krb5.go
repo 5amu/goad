@@ -42,7 +42,7 @@ func (o *Options) getFunction() func(string) {
 	return o.bruteforce
 }
 
-func (o *Options) Run() error {
+func (o *Options) Run() {
 	o.targets = utils.ExtractTargets(o.Targets.TARGETS)
 	o.target2SMBInfo = utils.GatherSMBInfoToMap(o.targets, 88)
 	var f func(string) = o.getFunction()
@@ -67,7 +67,6 @@ func (o *Options) Run() error {
 		}(target)
 	}
 	wg.Wait()
-	return nil
 }
 
 func (o *Options) userenum(target string) {

@@ -144,7 +144,6 @@ func (o *Options) Run() {
 	o.parallelExecution(func(s string) {
 		_, _, _ = o.authenticate(s)
 	})
-	return
 }
 
 func (o *Options) authenticate(target string) (*ldap.Conn, utils.Credential, error) {

@@ -38,7 +38,7 @@ func (o *Options) getFunction() func(string) {
 	return o.testCredentials
 }
 
-func (o *Options) Run() error {
+func (o *Options) Run() {
 	o.targets = utils.ExtractTargets(o.Targets.TARGETS)
 	o.target2SMBInfo = utils.GatherSMBInfoToMap(o.targets, 445)
 	var f func(string) = o.getFunction()
@@ -59,7 +59,6 @@ func (o *Options) Run() error {
 		}(t)
 	}
 	wg.Wait()
-	return nil
 }
 
 func (o *Options) testCredentials(target string) {

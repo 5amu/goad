@@ -49,12 +49,12 @@ func (o *Options) getFunction() func(string) {
 	return nil
 }
 
-func (o *Options) Run() error {
+func (o *Options) Run() {
 	o.targets = utils.ExtractTargets(o.Targets.TARGETS)
 	o.target2SMBInfo = utils.GatherSMBInfoToMap(o.targets, o.Connection.Port)
 	var f func(string) = o.getFunction()
 	if f == nil {
-		return nil
+		return
 	}
 
 	o.credentials = utils.NewCredentialsDispacher(
@@ -73,7 +73,6 @@ func (o *Options) Run() error {
 		}(target)
 	}
 	wg.Wait()
-	return nil
 }
 
 func (o *Options) exec(target string) {

@@ -2,6 +2,4 @@ package optrdp
 
 type Options struct{}
 
-func (o *Options) Run() error {
-	return nil
-}
+func (o *Options) Run() {}
