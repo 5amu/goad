@@ -103,12 +103,23 @@ func Shell(c *ssh.Client) error {
 	return session.Wait()
 }
 
-func ParseBanner(s string) string {
+func ParseBanner(s string) (r string) {
+	var totrim = []string{
+		"SSH-2.0-OpenSSH_for_",
+		"SSH-2.0-",
+	}
+
 	spl := strings.Split(s, " ")
 	if len(spl) == 1 {
-		return s
+		r = spl[0]
+	} else {
+		r = spl[1]
 	}
-	return spl[1]
+
+	for i := 0; i < len(totrim); i++ {
+		r = strings.TrimPrefix(r, totrim[i])
+	}
+	return r
 }
 
 func GrabBanner(host string, port int) (string, error) {
