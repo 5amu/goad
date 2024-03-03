@@ -1,4 +1,4 @@
-package kerberos
+package optkrb5
 
 import (
 	"encoding/hex"

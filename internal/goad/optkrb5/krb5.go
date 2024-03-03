@@ -5,7 +5,6 @@ import (
 
 	"github.com/5amu/goad/internal/printer"
 	"github.com/5amu/goad/internal/utils"
-	"github.com/5amu/goad/pkg/kerberos"
 	"github.com/5amu/goad/pkg/smb"
 )
 
@@ -73,7 +72,7 @@ func (o *Options) userenum(target string) {
 	prt := printer.NewPrinter("KRB5", target, o.target2SMBInfo[target].NetBIOSName, 88)
 	defer prt.PrintStored(&o.printMutex)
 
-	client, err := kerberos.NewKerberosClient(o.Connection.Domain, target)
+	client, err := NewKerberosClient(o.Connection.Domain, target)
 	if err != nil {
 		prt.StoreFailure(err.Error())
 		return
@@ -81,7 +80,7 @@ func (o *Options) userenum(target string) {
 
 	for _, u := range o.credentials {
 		if tgs, err := client.GetAsReqTgt(u.Username); err != nil {
-			_, ok := err.(*kerberos.ErrorRequiresPreauth)
+			_, ok := err.(*ErrorRequiresPreauth)
 			if ok {
 				prt.StoreSuccess(u.StringWithDomain(o.Connection.Domain), "Requires Preauth")
 			} else {
@@ -99,7 +98,7 @@ func (o *Options) bruteforce(target string) {
 	prt := printer.NewPrinter("KRB5", target, o.target2SMBInfo[target].NetBIOSName, 88)
 	defer prt.PrintStored(&o.printMutex)
 
-	client, err := kerberos.NewKerberosClient(o.Connection.Domain, target)
+	client, err := NewKerberosClient(o.Connection.Domain, target)
 	if err != nil {
 		prt.StoreFailure(err.Error())
 		return

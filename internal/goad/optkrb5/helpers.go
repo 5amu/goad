@@ -1,10 +1,10 @@
-package kerberos
+package optkrb5
 
 import (
 	"fmt"
 	"strings"
 
-	"github.com/5amu/goad/pkg/kerberos/kclient"
+	"github.com/5amu/goad/pkg/kclient"
 	kconfig "github.com/jcmturner/gokrb5/v8/config"
 	"github.com/jcmturner/gokrb5/v8/iana/errorcode"
 	"github.com/jcmturner/gokrb5/v8/keytab"

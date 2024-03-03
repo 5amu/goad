@@ -3,9 +3,9 @@ package optldap
 import (
 	"fmt"
 
+	"github.com/5amu/goad/internal/goad/optkrb5"
 	"github.com/5amu/goad/internal/printer"
 	"github.com/5amu/goad/internal/utils"
-	"github.com/5amu/goad/pkg/kerberos"
 )
 
 func (o *Options) asreproast(target string) {
@@ -24,7 +24,7 @@ func (o *Options) asreproast(target string) {
 		domain = o.target2SMBInfo[target].Domain
 	}
 
-	krb5client, err := kerberos.NewKerberosClient(domain, target)
+	krb5client, err := optkrb5.NewKerberosClient(domain, target)
 	if err != nil {
 		prt.StoreFailure(err.Error())
 		return
@@ -43,7 +43,7 @@ func (o *Options) asreproast(target string) {
 		if err != nil {
 			return err
 		}
-		hash := kerberos.ASREPToHashcat(*asrep.Ticket)
+		hash := optkrb5.ASREPToHashcat(*asrep.Ticket)
 		prt.Store(name, fmt.Sprintf("%s...%s", hash[:30], hash[len(hash)-10:]))
 		hashes = append(hashes, hash)
 		return nil
@@ -82,7 +82,7 @@ func (o *Options) kerberoast(target string) {
 		domain = o.target2SMBInfo[target].Domain
 	}
 
-	krb5client, err := kerberos.NewKerberosClient(domain, target)
+	krb5client, err := optkrb5.NewKerberosClient(domain, target)
 	if err != nil {
 		prt.StoreFailure(err.Error())
 		return
@@ -114,7 +114,7 @@ func (o *Options) kerberoast(target string) {
 				return err
 			}
 
-			hash := kerberos.TGSToHashcat(tgs.Ticket, name)
+			hash := optkrb5.TGSToHashcat(tgs.Ticket, name)
 			prt.Store(name, fmt.Sprintf("%s...%s", hash[:30], hash[len(hash)-10:]))
 
 			if i == 0 {
