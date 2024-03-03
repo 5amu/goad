@@ -1,4 +1,4 @@
-package utils
+package proxyconn
 
 import (
 	"fmt"

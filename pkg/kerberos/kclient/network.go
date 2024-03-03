@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/5amu/goad/pkg/proxy"
+	"github.com/5amu/goad/pkg/proxyconn"
 	"github.com/jcmturner/gokrb5/v8/iana/errorcode"
 	"github.com/jcmturner/gokrb5/v8/messages"
 )
@@ -103,7 +103,7 @@ func dialSendUDP(kdcs map[int]string, b []byte) ([]byte, error) {
 			return nil, err
 		}
 
-		conn, err := proxy.GetConnectionUDP(host, port)
+		conn, err := proxyconn.GetConnectionUDP(host, port)
 		if err != nil {
 			errs = append(errs, fmt.Sprintf("error setting dial timeout on connection to %s: %v", kdcs[i], err))
 			continue
@@ -177,7 +177,7 @@ func dialSendTCP(kdcs map[int]string, b []byte) ([]byte, error) {
 			return nil, err
 		}
 
-		conn, err := proxy.GetConnection(host, port)
+		conn, err := proxyconn.GetConnection(host, port)
 		if err != nil {
 			errs = append(errs, fmt.Sprintf("error setting dial timeout on connection to %s: %v", kdcs[i], err))
 			continue

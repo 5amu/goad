@@ -5,13 +5,13 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/5amu/goad/pkg/proxy"
+	"github.com/5amu/goad/pkg/proxyconn"
 	"github.com/go-ldap/ldap/v3"
 )
 
 func connect(host string, port int, useSsl bool) (*ldap.Conn, error) {
 	startConn := func(ssl bool) *ldap.Conn {
-		conn, err := proxy.GetConnection(host, port)
+		conn, err := proxyconn.GetConnection(host, port)
 		if err != nil {
 			return nil
 		}

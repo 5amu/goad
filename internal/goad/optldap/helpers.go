@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/5amu/goad/pkg/proxy"
+	"github.com/5amu/goad/pkg/proxyconn"
 	ldapfingerprint "github.com/praetorian-inc/fingerprintx/pkg/plugins/services/ldap"
 )
 
@@ -109,7 +109,7 @@ func UACFilter(prop UserAccountControl) string {
 }
 
 func IsLDAP(host string, port int) bool {
-	conn, err := proxy.GetConnection(host, port)
+	conn, err := proxyconn.GetConnection(host, port)
 	if err != nil {
 		return false
 	}

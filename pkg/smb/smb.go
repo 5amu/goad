@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/5amu/goad/pkg/proxy"
+	"github.com/5amu/goad/pkg/proxyconn"
 	"github.com/hirochachacha/go-smb2"
 	"github.com/praetorian-inc/fingerprintx/pkg/plugins"
 	smbfingerprint "github.com/praetorian-inc/fingerprintx/pkg/plugins/services/smb"
@@ -36,7 +36,7 @@ func (i *SMBInfo) String() string {
 }
 
 func getMetadata(host string) (*plugins.ServiceSMB, error) {
-	conn, err := proxy.GetConnection(host, 445)
+	conn, err := proxyconn.GetConnection(host, 445)
 	if err != nil {
 		return nil, err
 	}
@@ -87,7 +87,7 @@ func GatherSMBInfo(host string) (*SMBInfo, error) {
 }
 
 func getSMBInfo(host string, setupSession, v1 bool) (*zgrabsmb.SMBLog, error) {
-	conn, err := proxy.GetConnection(host, 445)
+	conn, err := proxyconn.GetConnection(host, 445)
 	if err != nil {
 		return nil, err
 	}
@@ -118,7 +118,7 @@ func NewClient(host string, port int, domain string) *Client {
 }
 
 func (c *Client) authenticate(username, password, hash string) error {
-	conn, err := proxy.GetConnection(c.Host, c.Port)
+	conn, err := proxyconn.GetConnection(c.Host, c.Port)
 	if err != nil {
 		return err
 	}

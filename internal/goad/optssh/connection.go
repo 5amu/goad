@@ -7,12 +7,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/5amu/goad/pkg/proxy"
+	"github.com/5amu/goad/pkg/proxyconn"
 	"golang.org/x/crypto/ssh"
 )
 
 func connect(user string, signer ssh.AuthMethod, host string, port int) (*ssh.Client, error) {
-	conn, err := proxy.GetConnection(host, port)
+	conn, err := proxyconn.GetConnection(host, port)
 	if err != nil {
 		return nil, err
 	}
@@ -112,7 +112,7 @@ func ParseBanner(s string) string {
 }
 
 func GrabBanner(host string, port int) (string, error) {
-	conn, err := proxy.GetConnection(host, port)
+	conn, err := proxyconn.GetConnection(host, port)
 	if err != nil {
 		return "", err
 	}
