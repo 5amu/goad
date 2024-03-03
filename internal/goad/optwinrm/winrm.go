@@ -9,8 +9,8 @@ import (
 
 	"github.com/5amu/goad/internal/printer"
 	"github.com/5amu/goad/internal/utils"
+	putils "github.com/5amu/goad/pkg/proxy"
 	"github.com/5amu/goad/pkg/smb"
-	putils "github.com/5amu/goad/pkg/utils"
 	"github.com/masterzen/winrm"
 )
 
