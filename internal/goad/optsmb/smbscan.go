@@ -1,26 +1,25 @@
-package utils
+package optsmb
 
 import (
 	"sync"
 
 	"github.com/5amu/goad/internal/printer"
-	"github.com/5amu/goad/pkg/smb"
 )
 
-func GetSMBInfo(host string) *smb.SMBInfo {
-	data, err := smb.GatherSMBInfo(host)
+func GetSMBInfo(host string) *SMBInfo {
+	data, err := GatherSMBInfo(host)
 	if data == nil || err != nil {
 		return nil
 	}
 	return data
 }
 
-func GatherSMBInfoToMap(targets []string, port int) map[string]*smb.SMBInfo {
-	ret := make(map[string]*smb.SMBInfo)
+func GatherSMBInfoToMap(targets []string, port int) map[string]*SMBInfo {
+	ret := make(map[string]*SMBInfo)
 	var wg sync.WaitGroup
 
 	var mapMutex sync.Mutex
-	guard := make(chan struct{}, DefaultMaxConcurrent)
+	guard := make(chan struct{}, 40)
 	for _, t := range targets {
 		wg.Add(1)
 		guard <- struct{}{}

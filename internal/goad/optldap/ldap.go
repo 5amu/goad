@@ -8,9 +8,9 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/5amu/goad/internal/goad/optsmb"
 	"github.com/5amu/goad/internal/printer"
 	"github.com/5amu/goad/internal/utils"
-	"github.com/5amu/goad/pkg/smb"
 	"github.com/go-ldap/ldap/v3"
 )
 
@@ -99,7 +99,7 @@ type Options struct {
 	*/
 
 	// Common utils
-	target2SMBInfo map[string]*smb.SMBInfo
+	target2SMBInfo map[string]*optsmb.SMBInfo
 	printMutex     sync.Mutex
 	credentials    []utils.Credential
 
@@ -151,7 +151,7 @@ func (o *Options) parallelExecution(runner func(string)) {
 }
 
 func (o *Options) Run() {
-	o.target2SMBInfo = utils.GatherSMBInfoToMap(
+	o.target2SMBInfo = optsmb.GatherSMBInfoToMap(
 		utils.ExtractTargets(o.Targets.TARGETS),
 		o.Connection.Port,
 	)

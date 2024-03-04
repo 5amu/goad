@@ -3,9 +3,9 @@ package optkrb5
 import (
 	"sync"
 
+	"github.com/5amu/goad/internal/goad/optsmb"
 	"github.com/5amu/goad/internal/printer"
 	"github.com/5amu/goad/internal/utils"
-	"github.com/5amu/goad/pkg/smb"
 )
 
 type Options struct {
@@ -29,7 +29,7 @@ type Options struct {
 	} `group:"Bruteforce Strategy"`
 
 	targets        []string
-	target2SMBInfo map[string]*smb.SMBInfo
+	target2SMBInfo map[string]*optsmb.SMBInfo
 	printMutex     sync.Mutex
 	credentials    []utils.Credential
 }
@@ -43,7 +43,7 @@ func (o *Options) getFunction() func(string) {
 
 func (o *Options) Run() {
 	o.targets = utils.ExtractTargets(o.Targets.TARGETS)
-	o.target2SMBInfo = utils.GatherSMBInfoToMap(o.targets, 88)
+	o.target2SMBInfo = optsmb.GatherSMBInfoToMap(o.targets, 88)
 	var f func(string) = o.getFunction()
 
 	var strategy utils.Strategy = utils.Clusterbomb

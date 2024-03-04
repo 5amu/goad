@@ -7,10 +7,10 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/5amu/goad/internal/goad/optsmb"
 	"github.com/5amu/goad/internal/printer"
 	"github.com/5amu/goad/internal/utils"
 	putils "github.com/5amu/goad/pkg/proxyconn"
-	"github.com/5amu/goad/pkg/smb"
 	"github.com/masterzen/winrm"
 )
 
@@ -32,7 +32,7 @@ type Options struct {
 	} `group:"Execution Mode"`
 
 	targets        []string
-	target2SMBInfo map[string]*smb.SMBInfo
+	target2SMBInfo map[string]*optsmb.SMBInfo
 	credentials    []utils.Credential
 	printMutex     sync.Mutex
 	cmd            string
@@ -51,7 +51,7 @@ func (o *Options) getFunction() func(string) {
 
 func (o *Options) Run() {
 	o.targets = utils.ExtractTargets(o.Targets.TARGETS)
-	o.target2SMBInfo = utils.GatherSMBInfoToMap(o.targets, o.Connection.Port)
+	o.target2SMBInfo = optsmb.GatherSMBInfoToMap(o.targets, o.Connection.Port)
 	var f func(string) = o.getFunction()
 	if f == nil {
 		return

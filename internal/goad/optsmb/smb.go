@@ -7,7 +7,6 @@ import (
 
 	"github.com/5amu/goad/internal/printer"
 	"github.com/5amu/goad/internal/utils"
-	"github.com/5amu/goad/pkg/smb"
 	"github.com/fatih/color"
 )
 
@@ -26,7 +25,7 @@ type Options struct {
 	Shares bool `long:"shares" description:"list open shares"`
 
 	credentials    []utils.Credential
-	target2SMBInfo map[string]*smb.SMBInfo
+	target2SMBInfo map[string]*SMBInfo
 	printMutex     sync.Mutex
 	targets        []string
 }
@@ -40,7 +39,7 @@ func (o *Options) getFunction() func(string) {
 
 func (o *Options) Run() {
 	o.targets = utils.ExtractTargets(o.Targets.TARGETS)
-	o.target2SMBInfo = utils.GatherSMBInfoToMap(o.targets, 445)
+	o.target2SMBInfo = GatherSMBInfoToMap(o.targets, 445)
 	var f func(string) = o.getFunction()
 
 	o.credentials = utils.NewCredentialsDispacher(
@@ -62,7 +61,7 @@ func (o *Options) Run() {
 }
 
 func (o *Options) testCredentials(target string) {
-	client := smb.NewClient(target, 445, o.Connection.Domain)
+	client := NewClient(target, 445, o.Connection.Domain)
 
 	prt := printer.NewPrinter("SMB", client.Host, o.target2SMBInfo[client.Host].NetBIOSName, 445)
 	defer prt.PrintStored(&o.printMutex)
@@ -98,7 +97,7 @@ func (o *Options) testCredentials(target string) {
 	}
 }
 
-func (o *Options) authenticate(client *smb.Client) (utils.Credential, error) {
+func (o *Options) authenticate(client *Client) (utils.Credential, error) {
 	prt := printer.NewPrinter("SMB", client.Host, o.target2SMBInfo[client.Host].NetBIOSName, 445)
 	defer prt.PrintStored(&o.printMutex)
 
@@ -130,7 +129,7 @@ func (o *Options) authenticate(client *smb.Client) (utils.Credential, error) {
 	return utils.Credential{}, fmt.Errorf("no valid authentication")
 }
 
-func shareToSlice(s smb.Share) []string {
+func shareToSlice(s Share) []string {
 	var out []string
 	out = append(out, s.Name)
 
@@ -148,7 +147,7 @@ func (o *Options) enumShares(target string) {
 	prt := printer.NewPrinter("SMB", target, o.target2SMBInfo[target].NetBIOSName, 445)
 	defer prt.PrintStored(&o.printMutex)
 
-	client := smb.NewClient(target, 445, o.Connection.Domain)
+	client := NewClient(target, 445, o.Connection.Domain)
 
 	if _, err := o.authenticate(client); err != nil {
 		prt.StoreFailure(err.Error())
