@@ -42,8 +42,8 @@ func (o *Options) read(target string) {
 			case ObjectSid:
 				data = append(data, DecodeSID(UnpackToString(m[a])))
 			case ManagedPassword:
-				d := UnpackToString(m[ManagedPassword])
-				blob := mstypes.NewMSDSManagedPasswordBlob([]byte(d))
+				var blob mstypes.MSDSManagedPasswordBlob
+				_ = mstypes.UnmarshalBinary(&blob, []byte(UnpackToString(m[ManagedPassword])))
 				data = append(data, mstypes.HashDataNTLM(blob.CurrentPassword))
 			default:
 				data = append(data, UnpackToString(m[a]))
