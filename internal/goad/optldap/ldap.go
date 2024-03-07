@@ -425,17 +425,17 @@ func (o *Options) parseD() ExecutionFunction {
 
 func (o *Options) parseH() ExecutionFunction {
 	if o.Hashes.AsrepRoast != "" {
-		o.filter = JoinFilters(
+		o.filters = []string{
 			FilterIsUser,
 			UACFilter(DONT_REQ_PREAUTH),
-		)
+		}
 		return Asreproast
 	}
 	if o.Hashes.Kerberoast != "" {
-		o.filter = JoinFilters(
+		o.filters = []string{
 			FilterIsUser,
 			NegativeFilter(UACFilter(ACCOUNTDISABLE)),
-		)
+		}
 		return Kerberoast
 	}
 	return Undefined

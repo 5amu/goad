@@ -69,33 +69,38 @@ func (o *Options) Run() {
 }
 
 func (o *Options) testCredentials(target string) {
-	client := NewClient(target, 445, o.Connection.Domain)
-
-	prt := printer.NewPrinter("SMB", client.Host, o.target2SMBInfo[client.Host].NetBIOSComputerName, 445)
+	prt := printer.NewPrinter("SMB", target, o.target2SMBInfo[target].NetBIOSComputerName, 445)
 	defer prt.PrintStored(&o.printMutex)
+
+	var domain string = o.Connection.Domain
+	if o.Connection.Domain == "" {
+		domain = o.target2SMBInfo[target].DNSDomainName
+	}
+
+	client := NewClient(target, DefaultPort, domain)
 
 	var valid bool = false
 	for _, creds := range o.credentials {
 		if creds.Hash != "" {
 			if err := client.AuthenticateWithHash(creds.Username, creds.Hash); err != nil {
-				prt.StoreFailure(creds.StringWithDomain(o.Connection.Domain))
+				prt.StoreFailure(creds.StringWithDomain(domain))
 			} else {
 				valid = true
 				if client.AdminShareWritable() {
-					prt.StoreSuccess(creds.StringWithDomain(o.Connection.Domain) + color.YellowString(" (Pwn3d!)"))
+					prt.StoreSuccess(creds.StringWithDomain(domain) + color.YellowString(" (Pwn3d!)"))
 				} else {
-					prt.StoreSuccess(creds.StringWithDomain(o.Connection.Domain))
+					prt.StoreSuccess(creds.StringWithDomain(domain))
 				}
 			}
 		} else {
 			if err := client.Authenticate(creds.Username, creds.Password); err != nil {
-				prt.StoreFailure(creds.StringWithDomain(o.Connection.Domain))
+				prt.StoreFailure(creds.StringWithDomain(domain))
 			} else {
 				valid = true
 				if client.AdminShareWritable() {
-					prt.StoreSuccess(creds.StringWithDomain(o.Connection.Domain) + color.YellowString(" (Pwn3d!)"))
+					prt.StoreSuccess(creds.StringWithDomain(domain) + color.YellowString(" (Pwn3d!)"))
 				} else {
-					prt.StoreSuccess(creds.StringWithDomain(o.Connection.Domain))
+					prt.StoreSuccess(creds.StringWithDomain(domain))
 				}
 			}
 		}
@@ -155,7 +160,11 @@ func (o *Options) enumShares(target string) {
 	prt := printer.NewPrinter("SMB", target, o.target2SMBInfo[target].NetBIOSComputerName, 445)
 	defer prt.PrintStored(&o.printMutex)
 
-	client := NewClient(target, 445, o.Connection.Domain)
+	var domain string = o.Connection.Domain
+	if o.Connection.Domain == "" {
+		domain = o.target2SMBInfo[target].DNSDomainName
+	}
+	client := NewClient(target, 445, domain)
 
 	if _, err := o.authenticate(client); err != nil {
 		prt.StoreFailure(err.Error())

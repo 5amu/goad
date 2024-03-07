@@ -29,7 +29,7 @@ func connect(host string, port int, useSsl bool) (*ldap.Conn, error) {
 		client := startConn(useSsl)
 		if err := client.StartTLS(&tls.Config{
 			InsecureSkipVerify: true,
-			ServerName:         host,
+			ServerName:         "",
 		}); err != nil {
 			client.Close()
 		} else {

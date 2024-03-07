@@ -187,7 +187,7 @@ func dialSendTCP(kdcs map[int]string, b []byte) ([]byte, error) {
 			continue
 		}
 		// conn is guaranteed to be a TCPConn
-		rb, err := sendTCP(conn.(*net.TCPConn), b)
+		rb, err := sendTCP(conn, b)
 		if err != nil {
 			errs = append(errs, fmt.Sprintf("error sneding to %s: %v", kdcs[i], err))
 			continue
@@ -198,7 +198,7 @@ func dialSendTCP(kdcs map[int]string, b []byte) ([]byte, error) {
 }
 
 // sendTCP sends bytes to connection over TCP.
-func sendTCP(conn *net.TCPConn, b []byte) ([]byte, error) {
+func sendTCP(conn net.Conn, b []byte) ([]byte, error) {
 	defer conn.Close()
 	var r []byte
 	// RFC 4120 7.2.2 specifies the first 4 bytes indicate the length of the message in big endian order.

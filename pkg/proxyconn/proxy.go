@@ -1,6 +1,7 @@
 package proxyconn
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"time"
@@ -19,19 +20,9 @@ func GetDialer() func(network, addr string) (net.Conn, error) {
 }
 
 func getConnection(network string, host string, port int) (net.Conn, error) {
-	pd := proxy.FromEnvironment()
-	if pd != nil {
-		conn, err := pd.Dial(network, fmt.Sprintf("%s:%d", host, port))
-		if err != nil {
-			return nil, err
-		}
-		return conn, nil
-	}
-	conn, err := net.DialTimeout(network, fmt.Sprintf("%s:%d", host, port), 2*time.Second)
-	if err != nil {
-		return nil, err
-	}
-	return conn, nil
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	return proxy.Dial(ctx, network, fmt.Sprintf("%s:%d", host, port))
 }
 
 func GetConnection(host string, port int) (net.Conn, error) {
