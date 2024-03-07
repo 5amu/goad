@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/5amu/goad/pkg/proxyconn"
+	"github.com/5amu/goad/pkg/smb"
 	"github.com/hirochachacha/go-smb2"
 )
 
@@ -141,4 +142,32 @@ func (c *Client) AdminShareWritable() bool {
 		_ = fs.Remove("goadtest.txt")
 	}
 	return !os.IsPermission(err)
+}
+
+func AdminShareWritable(s *smb.Session) bool {
+	if !s.IsAuthenticated {
+		return false
+	}
+
+	if err := s.TreeConnect("C$"); err != nil {
+		return false
+	}
+	defer s.TreeDisconnect("C$")
+
+	createR := smb.CreateRequest{
+		OpLock:             smb.SMB2_OPLOCK_LEVEL_NONE,
+		ImpersonationLevel: smb.Impersonation,
+		AccessMask:         smb.FILE_CREATE | smb.DELETE,
+		FileAttributes:     smb.FILE_ATTRIBUTE_NORMAL,
+		ShareAccess:        smb.FILE_SHARE_WRITE,
+		CreateDisposition:  smb.FILE_OVERWRITE_IF | smb.FILE_DELETE_ON_CLOSE,
+		CreateOptions:      smb.FILE_NON_DIRECTORY_FILE,
+	}
+
+	_, err := s.CreateRequest(s.Trees["C$"], "goadtest.txt", createR)
+	if err != nil {
+		s.Debug("", err)
+		return false
+	}
+	return true
 }

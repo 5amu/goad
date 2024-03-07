@@ -12,6 +12,7 @@ import (
 	"log"
 	"net"
 	"runtime/debug"
+	"strings"
 
 	"github.com/5amu/goad/pkg/encoder"
 	"github.com/5amu/goad/pkg/krb5/gss"
@@ -377,4 +378,40 @@ func (s *Session) Send(req interface{}) (res []byte, err error) {
 
 	s.MessageID++
 	return data, nil
+}
+
+func (s *Session) FileUpload(file, path string) (filename string, err error) {
+	treeId, ok := s.Trees["C$"]
+	if !ok {
+		return "", fmt.Errorf("share C$ not connected")
+	}
+
+	createRequestStruct := CreateRequest{
+		OpLock:             SMB2_OPLOCK_LEVEL_NONE,
+		ImpersonationLevel: Impersonation,
+		AccessMask:         FILE_CREATE,
+		FileAttributes:     FILE_ATTRIBUTE_NORMAL,
+		ShareAccess:        FILE_SHARE_WRITE,
+		CreateDisposition:  FILE_OVERWRITE_IF,
+		CreateOptions:      FILE_NON_DIRECTORY_FILE,
+	}
+
+	var newFilename string
+	if len(file) <= 11 {
+		newFilename = file
+	} else {
+		fileInfo := strings.Split(file, ".")
+		newFilename = "goadtest-" + "." + fileInfo[len(fileInfo)-1]
+	}
+	fileId, err := s.CreateRequest(treeId, newFilename, createRequestStruct)
+	if err != nil {
+		s.Debug("", err)
+		return "", err
+	}
+	err = s.WriteRequest(treeId, path, file, fileId)
+	if err != nil {
+		s.Debug("", err)
+		return newFilename, err
+	}
+	return newFilename, nil
 }

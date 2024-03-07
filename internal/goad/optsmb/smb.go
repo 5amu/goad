@@ -4,11 +4,11 @@ import (
 	"fmt"
 	"os"
 	"slices"
-	"strings"
 	"sync"
 
 	"github.com/5amu/goad/internal/printer"
 	"github.com/5amu/goad/internal/utils"
+	"github.com/5amu/goad/pkg/proxyconn"
 	"github.com/5amu/goad/pkg/smb"
 	"github.com/fatih/color"
 )
@@ -110,38 +110,47 @@ func (o *Options) testCredentials(target string) {
 	}
 }
 
-func (o *Options) authenticate(client *Client) (utils.Credential, error) {
-	prt := printer.NewPrinter("SMB", client.Host, o.target2SMBInfo[client.Host].NetBIOSComputerName, 445)
+func (o *Options) authenticate(host string, port int) (*smb.Session, utils.Credential, error) {
+	prt := printer.NewPrinter("SMB", host, o.target2SMBInfo[host].NetBIOSComputerName, 445)
 	defer prt.PrintStored(&o.printMutex)
 
+	var domain string = o.Connection.Domain
+	if o.Connection.Domain == "" {
+		domain = o.target2SMBInfo[host].DNSDomainName
+	}
+
 	for _, creds := range o.credentials {
+		conn, err := proxyconn.GetConnection(host, port)
+		if err != nil {
+			return nil, utils.Credential{}, err
+		}
+		opts := smb.Options{
+			Conn:   conn,
+			User:   creds.Username,
+			Domain: domain,
+		}
+
 		if creds.Hash != "" {
-			if err := client.AuthenticateWithHash(creds.Username, creds.Hash); err != nil {
-				prt.StoreFailure(creds.StringWithDomain(o.Connection.Domain))
-			} else {
-				if client.AdminShareWritable() {
-					prt.StoreSuccess(creds.StringWithDomain(o.Connection.Domain) + color.YellowString(" (Pwn3d!)"))
-				} else {
-					prt.StoreSuccess(creds.StringWithDomain(o.Connection.Domain))
-				}
-				return creds, nil
-			}
+			opts.Hash = creds.Hash
 		} else {
-			if err := client.Authenticate(creds.Username, creds.Password); err != nil {
-				prt.StoreFailure(creds.StringWithDomain(o.Connection.Domain))
+			opts.User = creds.Username
+		}
+
+		s, err := smb.NewSession(opts)
+		if err == nil {
+			prt.StoreSuccess(creds.StringWithDomain(domain))
+			if AdminShareWritable(s) {
+				prt.StoreSuccess(creds.StringWithDomain(domain) + color.YellowString(" (Pwn3d!)"))
 			} else {
-				if client.AdminShareWritable() {
-					prt.StoreSuccess(creds.StringWithDomain(o.Connection.Domain) + color.YellowString(" (Pwn3d!)"))
-				} else {
-					prt.StoreSuccess(creds.StringWithDomain(o.Connection.Domain))
-				}
-				return creds, nil
+				prt.StoreSuccess(creds.StringWithDomain(domain))
 			}
+			return s, creds, nil
 		}
 	}
-	return utils.Credential{}, fmt.Errorf("no valid authentication")
+	return nil, utils.Credential{}, fmt.Errorf("no valid authentication")
 }
 
+/*
 func shareToSlice(s Share) []string {
 	var out []string
 	out = append(out, s.Name)
@@ -155,12 +164,13 @@ func shareToSlice(s Share) []string {
 	}
 	return append(out, builder.String())
 }
+*/
 
 func (o *Options) enumShares(target string) {
 	prt := printer.NewPrinter("SMB", target, o.target2SMBInfo[target].NetBIOSComputerName, 445)
 	defer prt.PrintStored(&o.printMutex)
 
-	var domain string = o.Connection.Domain
+	/*var domain string = o.Connection.Domain
 	if o.Connection.Domain == "" {
 		domain = o.target2SMBInfo[target].DNSDomainName
 	}
@@ -180,4 +190,5 @@ func (o *Options) enumShares(target string) {
 	for _, s := range sh {
 		prt.Store(shareToSlice(s)...)
 	}
+	*/
 }
