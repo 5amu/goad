@@ -40,11 +40,14 @@ type V1Client struct {
 	messageId int
 }
 
-func NewV1Client(host string, port int) *V1Client {
-	return &V1Client{
-		Host: host,
-		Port: port,
-	}
+func NewV1Client() *V1Client {
+	return &V1Client{}
+}
+
+func (c *V1Client) WithHostPort(host string, port int) *V1Client {
+	c.Host = host
+	c.Port = port
+	return c
 }
 
 func (c *V1Client) WithConn(conn net.Conn) *V1Client {
@@ -52,12 +55,12 @@ func (c *V1Client) WithConn(conn net.Conn) *V1Client {
 	return c
 }
 
-func (c *V1Client) IsSMBv1() (bool, error) {
+func (c *V1Client) IsSMBv1() bool {
 	if c.Conn == nil {
 		var err error
 		c.Conn, err = net.Dial("tcp", fmt.Sprintf("%s:%d", c.Host, c.Port))
 		if err != nil {
-			return false, err
+			return false
 		}
 	}
 
@@ -84,7 +87,7 @@ func (c *V1Client) IsSMBv1() (bool, error) {
 
 	buf, err := Send(c.Conn, req)
 	if err != nil {
-		return false, err
+		return false
 	}
-	return string(buf[0:4]) == ProtocolSmb, nil
+	return string(buf[0:4]) == ProtocolSmb
 }

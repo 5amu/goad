@@ -11,6 +11,7 @@ import (
 	"github.com/5amu/goad/internal/goad/optsmb"
 	"github.com/5amu/goad/internal/printer"
 	"github.com/5amu/goad/internal/utils"
+	"github.com/5amu/goad/pkg/smb"
 	"github.com/go-ldap/ldap/v3"
 )
 
@@ -99,7 +100,7 @@ type Options struct {
 	*/
 
 	// Common utils
-	target2SMBInfo map[string]*optsmb.SMBInfo
+	target2SMBInfo map[string]*smb.SMBFingerprint
 	printMutex     sync.Mutex
 	credentials    []utils.Credential
 
@@ -153,7 +154,7 @@ func (o *Options) parallelExecution(runner func(string)) {
 func (o *Options) Run() {
 	o.target2SMBInfo = optsmb.GatherSMBInfoToMap(
 		utils.ExtractTargets(o.Targets.TARGETS),
-		o.Connection.Port,
+		optsmb.DefaultPort,
 	)
 
 	if !o.Connection.NullSession {
@@ -208,12 +209,12 @@ func (o *Options) authenticate(target string) (*ldap.Conn, utils.Credential, err
 		return nil, utils.Credential{}, err
 	}
 
-	prt := printer.NewPrinter("LDAP", target, o.target2SMBInfo[target].NetBIOSName, o.Connection.Port)
+	prt := printer.NewPrinter("LDAP", target, o.target2SMBInfo[target].NetBIOSComputerName, o.Connection.Port)
 	defer prt.PrintStored(&o.printMutex)
 
 	var domain string = o.Connection.Domain
 	if domain == "" {
-		domain = o.target2SMBInfo[target].Domain
+		domain = o.target2SMBInfo[target].DNSDomainName
 	}
 
 	if o.Connection.NullSession {

@@ -2,11 +2,14 @@ package optsmb
 
 import (
 	"fmt"
+	"os"
+	"slices"
 	"strings"
 	"sync"
 
 	"github.com/5amu/goad/internal/printer"
 	"github.com/5amu/goad/internal/utils"
+	"github.com/5amu/goad/pkg/smb"
 	"github.com/fatih/color"
 )
 
@@ -19,13 +22,14 @@ type Options struct {
 		Username string `short:"u" description:"Provide username (or FILE)"`
 		Password string `short:"p" description:"Provide password (or FILE)"`
 		NTLM     string `short:"H" long:"hashes" description:"authenticate with NTLM hash"`
-		Domain   string `short:"d" long:"domain" description:"Provide domain"`
+		Domain   string `short:"d" long:"domain" description:"provide domain"`
+		Port     int    `long:"port" default:"445" description:"Provide SMB port"`
 	} `group:"Connection Options" description:"Connection Options"`
 
 	Shares bool `long:"shares" description:"list open shares"`
 
 	credentials    []utils.Credential
-	target2SMBInfo map[string]*SMBInfo
+	target2SMBInfo map[string]*smb.SMBFingerprint
 	printMutex     sync.Mutex
 	targets        []string
 }
@@ -39,7 +43,7 @@ func (o *Options) getFunction() func(string) {
 
 func (o *Options) Run() {
 	o.targets = utils.ExtractTargets(o.Targets.TARGETS)
-	o.target2SMBInfo = GatherSMBInfoToMap(o.targets, 445)
+	o.target2SMBInfo = GatherSMBInfoToMap(o.targets, o.Connection.Port)
 	var f func(string) = o.getFunction()
 
 	o.credentials = utils.NewCredentialsDispacher(
@@ -48,6 +52,10 @@ func (o *Options) Run() {
 		o.Connection.NTLM,
 		utils.Clusterbomb,
 	)
+
+	if !slices.Contains(os.Args, "-u") {
+		return
+	}
 
 	var wg sync.WaitGroup
 	for t := range o.target2SMBInfo {
@@ -63,7 +71,7 @@ func (o *Options) Run() {
 func (o *Options) testCredentials(target string) {
 	client := NewClient(target, 445, o.Connection.Domain)
 
-	prt := printer.NewPrinter("SMB", client.Host, o.target2SMBInfo[client.Host].NetBIOSName, 445)
+	prt := printer.NewPrinter("SMB", client.Host, o.target2SMBInfo[client.Host].NetBIOSComputerName, 445)
 	defer prt.PrintStored(&o.printMutex)
 
 	var valid bool = false
@@ -98,7 +106,7 @@ func (o *Options) testCredentials(target string) {
 }
 
 func (o *Options) authenticate(client *Client) (utils.Credential, error) {
-	prt := printer.NewPrinter("SMB", client.Host, o.target2SMBInfo[client.Host].NetBIOSName, 445)
+	prt := printer.NewPrinter("SMB", client.Host, o.target2SMBInfo[client.Host].NetBIOSComputerName, 445)
 	defer prt.PrintStored(&o.printMutex)
 
 	for _, creds := range o.credentials {
@@ -144,7 +152,7 @@ func shareToSlice(s Share) []string {
 }
 
 func (o *Options) enumShares(target string) {
-	prt := printer.NewPrinter("SMB", target, o.target2SMBInfo[target].NetBIOSName, 445)
+	prt := printer.NewPrinter("SMB", target, o.target2SMBInfo[target].NetBIOSComputerName, 445)
 	defer prt.PrintStored(&o.printMutex)
 
 	client := NewClient(target, 445, o.Connection.Domain)

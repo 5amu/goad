@@ -1,37 +1,75 @@
 package optsmb
 
 import (
+	"fmt"
+	"strings"
 	"sync"
+	"time"
 
 	"github.com/5amu/goad/internal/printer"
+	"github.com/5amu/goad/pkg/proxyconn"
+	"github.com/5amu/goad/pkg/smb"
+	"github.com/fatih/color"
 )
 
-func GetSMBInfo(host string) *SMBInfo {
-	data, err := GatherSMBInfo(host)
-	if data == nil || err != nil {
-		return nil
+func FormatFingerprintData(f *smb.SMBFingerprint) string {
+	var builder strings.Builder
+	builder.WriteString(f.DNSComputerName)
+	builder.WriteString(" " + fmt.Sprintf("(version:%s)", f.OSVersion))
+	builder.WriteString(" " + fmt.Sprintf("(name:%s)", f.NetBIOSComputerName))
+	builder.WriteString(" " + fmt.Sprintf("(domain:%s)", f.DNSDomainName))
+
+	var colorFmt string
+	if !f.SigningRequired {
+		colorFmt = color.New(color.FgRed, color.Bold).SprintfFunc()("signing:False")
+	} else {
+		colorFmt = color.New(color.FgGreen).SprintfFunc()("signing:True")
 	}
-	return data
+	builder.WriteString(" (" + colorFmt + ")")
+	if !f.V1Support {
+		colorFmt = color.New(color.FgCyan).SprintfFunc()("SMBv1:False")
+	} else {
+		colorFmt = color.New(color.FgYellow).SprintfFunc()("SMBv1:True")
+	}
+	builder.WriteString(" (" + colorFmt + ")")
+	return builder.String()
 }
 
-func GatherSMBInfoToMap(targets []string, port int) map[string]*SMBInfo {
-	ret := make(map[string]*SMBInfo)
+func GetSMBInfo(host string, port int) (f *smb.SMBFingerprint) {
+	fchan := make(chan *smb.SMBFingerprint)
+	go func() {
+		fingerprint, err := smb.FingerprintSMB(host, port, proxyconn.GetDialer())
+		if err != nil {
+			fchan <- nil
+		}
+		fchan <- fingerprint
+	}()
+
+	select {
+	case f = <-fchan:
+	case <-time.After(2 * time.Second):
+	}
+	return
+}
+
+func GatherSMBInfoToMap(targets []string, port int) map[string]*smb.SMBFingerprint {
+	ret := make(map[string]*smb.SMBFingerprint)
 	var wg sync.WaitGroup
 
 	var mapMutex sync.Mutex
-	guard := make(chan struct{}, 40)
+	guard := make(chan struct{}, 128)
 	for _, t := range targets {
 		wg.Add(1)
 		guard <- struct{}{}
 		go func(s string) {
-			v := GetSMBInfo(s)
+			v := GetSMBInfo(s, port)
 			<-guard
 			if v != nil {
-				prt := printer.NewPrinter("SMB", s, v.NetBIOSName, 445)
+				prt := printer.NewPrinter("SMB", s, v.NetBIOSComputerName, port)
 				mapMutex.Lock()
 				ret[s] = v
 				mapMutex.Unlock()
-				prt.PrintInfo(v.String())
+				prt.PrintInfo(FormatFingerprintData(v))
 			}
 			wg.Done()
 		}(t)

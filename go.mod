@@ -14,6 +14,8 @@ require (
 require (
 	github.com/docker/go-units v0.5.0 // indirect
 	github.com/geoffgarside/ber v1.1.0 // indirect
+	github.com/sirupsen/logrus v1.9.0 // indirect
+	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c // indirect
 )
 
 require (
@@ -37,7 +39,6 @@ require (
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/praetorian-inc/fingerprintx v1.1.13
 	github.com/tidwall/transform v0.0.0-20201103190739-32f242e2dbde // indirect
-	github.com/zmap/zgrab2 v0.1.8-0.20230806160807-97ba87c0e706
 	golang.org/x/crypto v0.19.0
 	golang.org/x/net v0.19.0
 	golang.org/x/sys v0.17.0 // indirect

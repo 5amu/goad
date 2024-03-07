@@ -6,6 +6,7 @@ import (
 	"github.com/5amu/goad/internal/goad/optsmb"
 	"github.com/5amu/goad/internal/printer"
 	"github.com/5amu/goad/internal/utils"
+	"github.com/5amu/goad/pkg/smb"
 )
 
 type Options struct {
@@ -29,7 +30,7 @@ type Options struct {
 	} `group:"Bruteforce Strategy"`
 
 	targets        []string
-	target2SMBInfo map[string]*optsmb.SMBInfo
+	target2SMBInfo map[string]*smb.SMBFingerprint
 	printMutex     sync.Mutex
 	credentials    []utils.Credential
 }
@@ -43,7 +44,7 @@ func (o *Options) getFunction() func(string) {
 
 func (o *Options) Run() {
 	o.targets = utils.ExtractTargets(o.Targets.TARGETS)
-	o.target2SMBInfo = optsmb.GatherSMBInfoToMap(o.targets, 88)
+	o.target2SMBInfo = optsmb.GatherSMBInfoToMap(o.targets, optsmb.DefaultPort)
 	var f func(string) = o.getFunction()
 
 	var strategy utils.Strategy = utils.Clusterbomb
@@ -69,7 +70,7 @@ func (o *Options) Run() {
 }
 
 func (o *Options) userenum(target string) {
-	prt := printer.NewPrinter("KRB5", target, o.target2SMBInfo[target].NetBIOSName, 88)
+	prt := printer.NewPrinter("KRB5", target, o.target2SMBInfo[target].NetBIOSComputerName, 88)
 	defer prt.PrintStored(&o.printMutex)
 
 	client, err := NewKerberosClient(o.Connection.Domain, target)
@@ -95,7 +96,7 @@ func (o *Options) userenum(target string) {
 }
 
 func (o *Options) bruteforce(target string) {
-	prt := printer.NewPrinter("KRB5", target, o.target2SMBInfo[target].NetBIOSName, 88)
+	prt := printer.NewPrinter("KRB5", target, o.target2SMBInfo[target].NetBIOSComputerName, 88)
 	defer prt.PrintStored(&o.printMutex)
 
 	client, err := NewKerberosClient(o.Connection.Domain, target)

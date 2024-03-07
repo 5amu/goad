@@ -9,7 +9,7 @@ import (
 )
 
 func (o *Options) asreproast(target string) {
-	prt := printer.NewPrinter("LDAP", target, o.target2SMBInfo[target].NetBIOSName, o.Connection.Port)
+	prt := printer.NewPrinter("LDAP", target, o.target2SMBInfo[target].NetBIOSComputerName, o.Connection.Port)
 	defer prt.PrintStored(&o.printMutex)
 
 	lclient, creds, err := o.authenticate(target)
@@ -21,7 +21,7 @@ func (o *Options) asreproast(target string) {
 
 	var domain string = o.Connection.Domain
 	if domain == "" {
-		domain = o.target2SMBInfo[target].Domain
+		domain = o.target2SMBInfo[target].DNSDomainName
 	}
 
 	krb5client, err := optkrb5.NewKerberosClient(domain, target)
@@ -67,7 +67,7 @@ func (o *Options) asreproast(target string) {
 }
 
 func (o *Options) kerberoast(target string) {
-	prt := printer.NewPrinter("LDAP", target, o.target2SMBInfo[target].NetBIOSName, o.Connection.Port)
+	prt := printer.NewPrinter("LDAP", target, o.target2SMBInfo[target].NetBIOSComputerName, o.Connection.Port)
 	defer prt.PrintStored(&o.printMutex)
 
 	lclient, creds, err := o.authenticate(target)
@@ -79,7 +79,7 @@ func (o *Options) kerberoast(target string) {
 
 	var domain string = o.Connection.Domain
 	if domain == "" {
-		domain = o.target2SMBInfo[target].Domain
+		domain = o.target2SMBInfo[target].DNSDomainName
 	}
 
 	krb5client, err := optkrb5.NewKerberosClient(domain, target)

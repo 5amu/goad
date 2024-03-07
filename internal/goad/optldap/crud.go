@@ -6,12 +6,13 @@ import (
 
 	"github.com/5amu/goad/internal/printer"
 	"github.com/5amu/goad/internal/utils"
+	"github.com/5amu/goad/pkg/krb5/ntlm"
 	"github.com/5amu/goad/pkg/mstypes"
 	"github.com/go-ldap/ldap/v3"
 )
 
 func (o *Options) read(target string) {
-	prt := printer.NewPrinter("LDAP", target, o.target2SMBInfo[target].NetBIOSName, o.Connection.Port)
+	prt := printer.NewPrinter("LDAP", target, o.target2SMBInfo[target].NetBIOSComputerName, o.Connection.Port)
 	defer prt.PrintStored(&o.printMutex)
 
 	prt.StoreInfo("LDAP Query Filter")
@@ -30,7 +31,7 @@ func (o *Options) read(target string) {
 
 	var domain string = o.Connection.Domain
 	if domain == "" {
-		domain = o.target2SMBInfo[target].Domain
+		domain = o.target2SMBInfo[target].DNSDomainName
 	}
 
 	err = FindObjectsWithCallback(lclient, domain, o.filter, func(m map[string]interface{}) error {
@@ -44,7 +45,7 @@ func (o *Options) read(target string) {
 			case ManagedPassword:
 				var blob mstypes.MSDSManagedPasswordBlob
 				_ = mstypes.UnmarshalBinary(&blob, []byte(UnpackToString(m[ManagedPassword])))
-				data = append(data, mstypes.HashDataNTLM(blob.CurrentPassword))
+				data = append(data, ntlm.HashDataNTLM(blob.CurrentPassword))
 			default:
 				data = append(data, UnpackToString(m[a]))
 			}
@@ -59,7 +60,7 @@ func (o *Options) read(target string) {
 }
 
 func (o *Options) create(target string) {
-	prt := printer.NewPrinter("LDAP", target, o.target2SMBInfo[target].NetBIOSName, o.Connection.Port)
+	prt := printer.NewPrinter("LDAP", target, o.target2SMBInfo[target].NetBIOSComputerName, o.Connection.Port)
 	defer prt.PrintStored(&o.printMutex)
 
 	lclient, _, err := o.authenticate(target)
@@ -71,7 +72,7 @@ func (o *Options) create(target string) {
 
 	var domain string = o.Connection.Domain
 	if domain == "" {
-		domain = o.target2SMBInfo[target].Domain
+		domain = o.target2SMBInfo[target].DNSDomainName
 	}
 
 	var req *ldap.AddRequest
@@ -123,7 +124,7 @@ const (
 )
 
 func (o *Options) delete(target string) {
-	prt := printer.NewPrinter("LDAP", target, o.target2SMBInfo[target].NetBIOSName, o.Connection.Port)
+	prt := printer.NewPrinter("LDAP", target, o.target2SMBInfo[target].NetBIOSComputerName, o.Connection.Port)
 	defer prt.PrintStored(&o.printMutex)
 
 	lclient, _, err := o.authenticate(target)
@@ -135,7 +136,7 @@ func (o *Options) delete(target string) {
 
 	var domain string = o.Connection.Domain
 	if domain == "" {
-		domain = o.target2SMBInfo[target].Domain
+		domain = o.target2SMBInfo[target].DNSDomainName
 	}
 
 	var req *ldap.DelRequest

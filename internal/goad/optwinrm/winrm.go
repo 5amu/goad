@@ -11,6 +11,7 @@ import (
 	"github.com/5amu/goad/internal/printer"
 	"github.com/5amu/goad/internal/utils"
 	putils "github.com/5amu/goad/pkg/proxyconn"
+	"github.com/5amu/goad/pkg/smb"
 	"github.com/masterzen/winrm"
 )
 
@@ -32,7 +33,7 @@ type Options struct {
 	} `group:"Execution Mode"`
 
 	targets        []string
-	target2SMBInfo map[string]*optsmb.SMBInfo
+	target2SMBInfo map[string]*smb.SMBFingerprint
 	credentials    []utils.Credential
 	printMutex     sync.Mutex
 	cmd            string
@@ -51,7 +52,7 @@ func (o *Options) getFunction() func(string) {
 
 func (o *Options) Run() {
 	o.targets = utils.ExtractTargets(o.Targets.TARGETS)
-	o.target2SMBInfo = optsmb.GatherSMBInfoToMap(o.targets, o.Connection.Port)
+	o.target2SMBInfo = optsmb.GatherSMBInfoToMap(o.targets, 445)
 	var f func(string) = o.getFunction()
 	if f == nil {
 		return
@@ -76,7 +77,7 @@ func (o *Options) Run() {
 }
 
 func (o *Options) exec(target string) {
-	prt := printer.NewPrinter("WINRM", target, o.target2SMBInfo[target].NetBIOSName, o.Connection.Port)
+	prt := printer.NewPrinter("WINRM", target, o.target2SMBInfo[target].NetBIOSComputerName, o.Connection.Port)
 	defer prt.PrintStored(&o.printMutex)
 
 	var client *winrm.Client
@@ -114,7 +115,7 @@ func (o *Options) exec(target string) {
 }
 
 func (o *Options) openShell(target string) {
-	prt := printer.NewPrinter("WINRM", target, o.target2SMBInfo[target].NetBIOSName, o.Connection.Port)
+	prt := printer.NewPrinter("WINRM", target, o.target2SMBInfo[target].NetBIOSComputerName, o.Connection.Port)
 	defer prt.PrintStored(&o.printMutex)
 
 	if len(o.credentials) != 1 {
