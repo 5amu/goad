@@ -12,6 +12,7 @@ require (
 )
 
 require (
+	github.com/5amu/smb v0.0.0-20240308173512-c3ff299082ef // indirect
 	github.com/docker/go-units v0.5.0 // indirect
 	github.com/geoffgarside/ber v1.1.0 // indirect
 	github.com/sirupsen/logrus v1.9.0 // indirect
@@ -39,8 +40,8 @@ require (
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/praetorian-inc/fingerprintx v1.1.13
 	github.com/tidwall/transform v0.0.0-20201103190739-32f242e2dbde // indirect
-	golang.org/x/crypto v0.19.0
-	golang.org/x/net v0.19.0
-	golang.org/x/sys v0.17.0 // indirect
+	golang.org/x/crypto v0.21.0
+	golang.org/x/net v0.21.0
+	golang.org/x/sys v0.18.0 // indirect
 	golang.org/x/text v0.14.0
 )

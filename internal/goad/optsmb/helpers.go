@@ -1,134 +1,22 @@
 package optsmb
 
 import (
-	"context"
+	"fmt"
 	"os"
 	"strings"
+	"sync"
+	"time"
 
+	"github.com/5amu/goad/internal/printer"
 	"github.com/5amu/goad/pkg/proxyconn"
-	"github.com/5amu/goad/pkg/smb"
-	"github.com/hirochachacha/go-smb2"
+	"github.com/5amu/smb"
+	"github.com/fatih/color"
 )
 
 const DefaultPort = 445
 
-type Client struct {
-	Host    string
-	Port    int
-	Domain  string
-	session *smb2.Session
-}
-
-func NewClient(host string, port int, domain string) *Client {
-	return &Client{
-		Host:   host,
-		Port:   port,
-		Domain: domain,
-	}
-}
-
-func (c *Client) authenticate(username, password, hash string) error {
-	conn, err := proxyconn.GetConnection(c.Host, c.Port)
-	if err != nil {
-		return err
-	}
-
-	var initiator smb2.NTLMInitiator
-	if password != "" {
-		initiator = smb2.NTLMInitiator{
-			User:     username,
-			Password: password,
-			Domain:   c.Domain,
-		}
-	} else {
-		initiator = smb2.NTLMInitiator{
-			User:   username,
-			Hash:   []byte(hash),
-			Domain: c.Domain,
-		}
-	}
-
-	d := &smb2.Dialer{
-		Initiator: &initiator,
-	}
-
-	session, err := d.DialContext(context.TODO(), conn)
-	if err != nil {
-		return err
-	}
-
-	c.session = session
-	return nil
-}
-
-func (c *Client) Authenticate(username, password string) error {
-	return c.authenticate(username, password, "")
-}
-
-func (c *Client) AuthenticateWithHash(username, hash string) error {
-	return c.authenticate(username, "", hash)
-}
-
-type Share struct {
-	Name     string
-	Readable bool
-	Writable bool
-}
-
-func (c *Client) ListSharenames() ([]string, error) {
-	return c.session.ListSharenames()
-}
-
-func (c *Client) ListShares() ([]Share, error) {
-	sh, err := c.session.ListSharenames()
-	if err != nil {
-		return nil, err
-	}
-
-	var res []Share
-	for _, sname := range sh {
-		if strings.EqualFold(sname, "IPC$") {
-			res = append(res, Share{
-				Name:     sname,
-				Readable: true,
-				Writable: false,
-			})
-			continue
-		}
-		var readable bool = false
-		var writable bool = false
-
-		fs, err := c.session.Mount(sname)
-		if err != nil {
-			res = append(res, Share{
-				Name:     sname,
-				Readable: readable,
-				Writable: writable,
-			})
-			continue
-		}
-		readable = true
-
-		err = fs.WriteFile("goadtest.txt", []byte("test"), 0444)
-		writable = !os.IsPermission(err)
-		if writable {
-			// cleanup
-			_ = fs.Remove("goadtest.txt")
-		}
-
-		_ = fs.Umount()
-
-		res = append(res, Share{
-			Name:     sname,
-			Readable: readable,
-			Writable: writable,
-		})
-	}
-	return res, nil
-}
-
-func (c *Client) AdminShareWritable() bool {
-	fs, err := c.session.Mount("ADMIN$")
+func IsAdminShareWritable(s *smb.Session) bool {
+	fs, err := s.Mount("ADMIN$")
 	if err != nil {
 		return false
 	}
@@ -144,30 +32,70 @@ func (c *Client) AdminShareWritable() bool {
 	return !os.IsPermission(err)
 }
 
-func AdminShareWritable(s *smb.Session) bool {
-	if !s.IsAuthenticated {
-		return false
+func FormatFingerprintData(f *smb.SMBFingerprint) string {
+	var builder strings.Builder
+	builder.WriteString(f.DNSComputerName)
+	if f.OSVersion != "" {
+		builder.WriteString(" " + fmt.Sprintf("(version:%s)", f.OSVersion))
 	}
+	builder.WriteString(" " + fmt.Sprintf("(name:%s)", f.NetBIOSComputerName))
+	builder.WriteString(" " + fmt.Sprintf("(domain:%s)", f.DNSDomainName))
 
-	if err := s.TreeConnect("C$"); err != nil {
-		return false
+	var colorFmt string
+	if !f.SigningRequired {
+		colorFmt = color.New(color.FgRed, color.Bold).SprintfFunc()("signing:False")
+	} else {
+		colorFmt = color.New(color.FgGreen).SprintfFunc()("signing:True")
 	}
-	defer s.TreeDisconnect("C$")
+	builder.WriteString(" (" + colorFmt + ")")
+	if !f.V1Support {
+		colorFmt = color.New(color.FgCyan).SprintfFunc()("SMBv1:False")
+	} else {
+		colorFmt = color.New(color.FgYellow).SprintfFunc()("SMBv1:True")
+	}
+	builder.WriteString(" (" + colorFmt + ")")
+	return builder.String()
+}
 
-	createR := smb.CreateRequest{
-		OpLock:             smb.SMB2_OPLOCK_LEVEL_NONE,
-		ImpersonationLevel: smb.Impersonation,
-		AccessMask:         smb.FILE_CREATE | smb.DELETE,
-		FileAttributes:     smb.FILE_ATTRIBUTE_NORMAL,
-		ShareAccess:        smb.FILE_SHARE_WRITE,
-		CreateDisposition:  smb.FILE_OVERWRITE_IF | smb.FILE_DELETE_ON_CLOSE,
-		CreateOptions:      smb.FILE_NON_DIRECTORY_FILE,
-	}
+func GetSMBInfo(host string, port int) (f *smb.SMBFingerprint) {
+	fchan := make(chan *smb.SMBFingerprint)
+	go func() {
+		fingerprint, err := smb.FingerprintWithDialer(host, port, proxyconn.GetDialer())
+		if err != nil {
+			fchan <- nil
+		}
+		fchan <- fingerprint
+	}()
 
-	_, err := s.CreateRequest(s.Trees["C$"], "goadtest.txt", createR)
-	if err != nil {
-		s.Debug("", err)
-		return false
+	select {
+	case f = <-fchan:
+	case <-time.After(2 * time.Second):
 	}
-	return true
+	return
+}
+
+func GatherSMBInfoToMap(targets []string, port int) map[string]*smb.SMBFingerprint {
+	ret := make(map[string]*smb.SMBFingerprint)
+	var wg sync.WaitGroup
+
+	var mapMutex sync.Mutex
+	guard := make(chan struct{}, 128)
+	for _, t := range targets {
+		wg.Add(1)
+		guard <- struct{}{}
+		go func(s string) {
+			v := GetSMBInfo(s, port)
+			<-guard
+			if v != nil {
+				prt := printer.NewPrinter("SMB", s, v.NetBIOSComputerName, port)
+				mapMutex.Lock()
+				ret[s] = v
+				mapMutex.Unlock()
+				prt.PrintInfo(FormatFingerprintData(v))
+			}
+			wg.Done()
+		}(t)
+	}
+	wg.Wait()
+	return ret
 }

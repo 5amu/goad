@@ -1,10 +1,13 @@
 package optldap
 
 import (
+	"encoding/hex"
 	"fmt"
 	"strconv"
 	"strings"
 	"time"
+
+	"golang.org/x/crypto/md4" //nolint:staticcheck
 )
 
 func toDN(s string) string {
@@ -90,4 +93,10 @@ func UnpackToString(i interface{}) string {
 	default:
 		return strings.Join(unpacked, " ")
 	}
+}
+
+func HashDataNTLM(b []byte) string {
+	mdfour := md4.New()
+	_, _ = mdfour.Write(b)
+	return hex.EncodeToString(mdfour.Sum(nil))
 }

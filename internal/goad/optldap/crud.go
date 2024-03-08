@@ -6,7 +6,6 @@ import (
 
 	"github.com/5amu/goad/internal/printer"
 	"github.com/5amu/goad/internal/utils"
-	"github.com/5amu/goad/pkg/krb5/ntlm"
 	"github.com/5amu/goad/pkg/mstypes"
 	"github.com/go-ldap/ldap/v3"
 )
@@ -45,7 +44,7 @@ func (o *Options) read(target string) {
 			case ManagedPassword:
 				var blob mstypes.MSDSManagedPasswordBlob
 				_ = mstypes.UnmarshalBinary(&blob, []byte(UnpackToString(m[ManagedPassword])))
-				data = append(data, ntlm.HashDataNTLM(blob.CurrentPassword))
+				data = append(data, HashDataNTLM(blob.CurrentPassword))
 			default:
 				data = append(data, UnpackToString(m[a]))
 			}
