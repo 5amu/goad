@@ -151,7 +151,9 @@ func (o *Options) enumShares(target string) {
 					// cleanup
 					_ = fs.Remove("goadtest.txt")
 				}
-				go fs.Umount()
+				go func() {
+					_ = fs.Umount()
+				}()
 			}
 		}
 		toAppend = []string{sname}
