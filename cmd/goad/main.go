@@ -13,9 +13,9 @@ import (
 )
 
 type MainOptions struct {
-	FTP  optftp.Options  `command:"ftp" description:"Own stuff using SMB"`
+	FTP  optftp.Options  `command:"ftp" description:"Own stuff using FTP"`
 	LDAP optldap.Options `command:"ldap" description:"Own stuff using LDAP"`
-	KRB5 optkrb5.Options `command:"krb5" description:"Own stuff using Kerberos"`
+	KRB5 optkrb5.Options `command:"krb5" description:"Own stuff using KERBEROS"`
 	//MSSQL optmssql.Options `command:"mssql" description:"Own stuff using MSSQL"`
 	//RDP   optrdp.Options   `command:"rdp" description:"Own stuff using RDP"`
 	SMB optsmb.Options `command:"smb" description:"Own stuff using SMB"`
