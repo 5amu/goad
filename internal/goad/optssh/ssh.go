@@ -81,7 +81,7 @@ func (o *Options) Run() {
 	}
 
 	var wg sync.WaitGroup
-	for _, target := range o.targets {
+	for target := range o.target2Banner {
 		wg.Add(1)
 		go func(t string) {
 			f(t)
@@ -129,7 +129,6 @@ func (o *Options) exec(target string) {
 
 	c, err := o.authenticate(target)
 	if err != nil {
-		prt.StoreFailure(err.Error())
 		return
 	}
 

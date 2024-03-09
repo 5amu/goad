@@ -20,7 +20,7 @@ func connect(user string, signer ssh.AuthMethod, host string, port int) (*ssh.Cl
 		User:            user,
 		Auth:            []ssh.AuthMethod{signer},
 		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
-		Timeout:         3 * time.Second,
+		Timeout:         2 * time.Second,
 	})
 	if err != nil {
 		return nil, err
