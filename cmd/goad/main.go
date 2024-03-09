@@ -55,6 +55,8 @@ func main() {
 			//  opts.VNC.Run()
 			//case "wmi":
 			//  opts.WMI.Run()
+			//case "winrm":
+			//	opts.WINRM.Run()
 			case "ldap":
 				opts.LDAP.Run()
 			case "krb5":
@@ -63,8 +65,6 @@ func main() {
 				opts.SMB.Run()
 			case "ssh":
 				opts.SSH.Run()
-			case "winrm":
-				opts.WINRM.Run()
 			}
 		}
 	}
