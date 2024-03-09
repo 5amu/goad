@@ -102,12 +102,12 @@ func gatherTarget2BannerMap(mutex *sync.Mutex, targets []string, port int) map[s
 	for _, t := range targets {
 		wg.Add(1)
 		go func(p string) {
-			if VerifyVNC(t, port) {
-				prt := printer.NewPrinter("VNC", p, t, port)
+			if VerifyVNC(p, port) {
+				prt := printer.NewPrinter("VNC", p, p, port)
 				mapMutex.Lock()
-				res[p] = t
+				res[p] = p
 				mapMutex.Unlock()
-				prt.PrintInfo(fmt.Sprintf("VNC Server of %s", t))
+				prt.PrintInfo(fmt.Sprintf("VNC Server of %s", p))
 			}
 			wg.Done()
 		}(t)
