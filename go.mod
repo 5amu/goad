@@ -8,12 +8,15 @@ require (
 	github.com/fatih/color v1.16.0
 	github.com/go-ldap/ldap/v3 v3.4.6
 	github.com/jcmturner/gokrb5/v8 v8.4.4
+	github.com/jlaffaye/ftp v0.2.0
 	github.com/masterzen/winrm v0.0.0-20231227165926-e811dad5ac77
 )
 
 require (
 	github.com/docker/go-units v0.5.0 // indirect
 	github.com/geoffgarside/ber v1.1.0 // indirect
+	github.com/hashicorp/errwrap v1.1.0 // indirect
+	github.com/hashicorp/go-multierror v1.1.1 // indirect
 	github.com/sirupsen/logrus v1.9.0 // indirect
 	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c // indirect
 )

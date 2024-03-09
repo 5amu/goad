@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/5amu/go-flags"
+	"github.com/5amu/goad/internal/goad/optftp"
 	"github.com/5amu/goad/internal/goad/optkrb5"
 	"github.com/5amu/goad/internal/goad/optldap"
 	"github.com/5amu/goad/internal/goad/optsmb"
@@ -13,7 +14,7 @@ import (
 )
 
 type MainOptions struct {
-	//FTP  optftp.Options  `command:"ftp" description:"Own stuff using SMB"`
+	FTP  optftp.Options  `command:"ftp" description:"Own stuff using SMB"`
 	LDAP optldap.Options `command:"ldap" description:"Own stuff using LDAP"`
 	KRB5 optkrb5.Options `command:"krb5" description:"Own stuff using Kerberos"`
 	//MSSQL optmssql.Options `command:"mssql" description:"Own stuff using MSSQL"`
@@ -45,8 +46,8 @@ func main() {
 	for _, c := range p.Commands() {
 		if p.Find(c.Name) == p.Active {
 			switch c.Name {
-			//case "ftp":
-			//	opts.FTP.Run()
+			case "ftp":
+				opts.FTP.Run()
 			//case "mssql":
 			//	opts.MSSQL.Run()
 			//case "rdp":

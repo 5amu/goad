@@ -112,7 +112,7 @@ func (p *Printer) PrintInfo(msg ...string) {
 	)
 }
 
-func (p *Printer) store(symbol string, msg ...string) {
+func (p *Printer) store(symbol string, strip bool, msg ...string) {
 	var row strings.Builder
 	row.WriteString(p.config.FirstColumnFormatter("%-8s", p.module))
 	row.WriteString(fmt.Sprintf("%-16s", p.target))
@@ -133,16 +133,29 @@ func (p *Printer) store(symbol string, msg ...string) {
 	} else {
 		txt = p.config.OutputFormatter(message.String())
 	}
-	p.storage = append(p.storage, strings.ReplaceAll(strings.ReplaceAll(fmt.Sprintf("%s%s%s", row.String(), symbol, txt), "\n", ""), "\r", "")+"\n")
+
+	var toAppend []string
+	if strip {
+		tmp := strings.ReplaceAll(strings.ReplaceAll(fmt.Sprintf("%s%s%s", row.String(), symbol, txt), "\n", ""), "\r", "") + "\n"
+		toAppend = append(toAppend, tmp)
+	} else {
+		tmpS := strings.Split(strings.ReplaceAll(txt, "\r", ""), "\n")
+		for _, l := range tmpS {
+			toAppend = append(toAppend, fmt.Sprintf("%s%s%s\n", row.String(), symbol, p.config.OutputFormatter(l)))
+		}
+	}
+
+	p.storage = append(p.storage, toAppend...)
 }
 
 func (p *Printer) Store(msg ...string) {
-	p.store("", msg...)
+	p.store("", true, msg...)
 }
 
 func (p *Printer) StoreFailure(msg ...string) {
 	p.store(
 		p.config.FailureFormatter("%s ", p.config.FailureSymbol),
+		true,
 		msg...,
 	)
 }
@@ -150,6 +163,7 @@ func (p *Printer) StoreFailure(msg ...string) {
 func (p *Printer) StoreInfo(msg ...string) {
 	p.store(
 		color.BlueString("%s ", p.config.SuccessSymbol),
+		true,
 		msg...,
 	)
 }
@@ -157,6 +171,7 @@ func (p *Printer) StoreInfo(msg ...string) {
 func (p *Printer) StoreSuccess(msg ...string) {
 	p.store(
 		p.config.SuccessFormatter("%s ", p.config.SuccessSymbol),
+		true,
 		msg...,
 	)
 }
@@ -167,4 +182,8 @@ func (p *Printer) PrintStored(mutex *sync.Mutex) {
 		fmt.Fprintf(p.config.Writer, "%s", s)
 	}
 	mutex.Unlock()
+}
+
+func (p *Printer) StoreWithoutStripping(msg ...string) {
+	p.store("", false, msg...)
 }

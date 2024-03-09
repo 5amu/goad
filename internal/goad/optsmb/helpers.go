@@ -60,7 +60,7 @@ func FormatFingerprintData(f *smb.SMBFingerprint) string {
 func GetSMBInfo(host string, port int) (f *smb.SMBFingerprint) {
 	fchan := make(chan *smb.SMBFingerprint)
 	go func() {
-		fingerprint, err := smb.FingerprintWithDialer(host, port, proxyconn.GetDialer())
+		fingerprint, err := smb.FingerprintWithDialer(host, port, proxyconn.GetDialFunc())
 		if err != nil {
 			fchan <- nil
 		}

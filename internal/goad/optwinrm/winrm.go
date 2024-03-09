@@ -85,7 +85,7 @@ func (o *Options) exec(target string) {
 		var err error
 		params := winrm.DefaultParameters
 
-		params.TransportDecorator = func() winrm.Transporter { return winrm.NewClientNTLMWithDial(putils.GetDialer()) }
+		params.TransportDecorator = func() winrm.Transporter { return winrm.NewClientNTLMWithDial(putils.GetDialFunc()) }
 		client, err = winrm.NewClientWithParameters(
 			winrm.NewEndpoint(target, o.Connection.Port, o.Connection.SSL, true, nil, nil, nil, 0),
 			cred.Username,
@@ -128,7 +128,7 @@ func (o *Options) openShell(target string) {
 
 	for _, cred := range o.credentials {
 		params := winrm.DefaultParameters
-		params.TransportDecorator = func() winrm.Transporter { return winrm.NewClientNTLMWithDial(putils.GetDialer()) }
+		params.TransportDecorator = func() winrm.Transporter { return winrm.NewClientNTLMWithDial(putils.GetDialFunc()) }
 		client, err := winrm.NewClientWithParameters(
 			winrm.NewEndpoint(target, o.Connection.Port, o.Connection.SSL, true, nil, nil, nil, 0),
 			cred.Username,
