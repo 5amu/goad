@@ -10,7 +10,6 @@ import (
 	"github.com/5amu/goad/internal/goad/optldap"
 	"github.com/5amu/goad/internal/goad/optsmb"
 	"github.com/5amu/goad/internal/goad/optssh"
-	"github.com/5amu/goad/internal/goad/optwinrm"
 )
 
 type MainOptions struct {
@@ -22,7 +21,7 @@ type MainOptions struct {
 	SMB optsmb.Options `command:"smb" description:"Own stuff using SMB"`
 	SSH optssh.Options `command:"ssh" description:"Own stuff using SSH"`
 	//VNC   optvnc.Options   `command:"vnc" description:"Own stuff using VNC"`
-	WINRM optwinrm.Options `command:"winrm" description:"Own stuff using WINRM"`
+	//WINRM optwinrm.Options `command:"winrm" description:"Own stuff using WINRM"`
 	//WMI   optwmi.Options   `command:"wmi" description:"Own stuff using WMI"`
 }
 
