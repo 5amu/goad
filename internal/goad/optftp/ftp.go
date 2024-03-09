@@ -123,7 +123,9 @@ func (o *Options) listRoot(target string) {
 	if err != nil {
 		return
 	}
-	defer srv.Quit()
+	defer func() {
+		_ = srv.Quit()
+	}()
 
 	e, err := srv.List("/")
 	if err != nil {
@@ -144,7 +146,9 @@ func (o *Options) recursiveList(target string) {
 	if err != nil {
 		return
 	}
-	defer srv.Quit()
+	defer func() {
+		_ = srv.Quit()
+	}()
 
 	for fs := srv.Walk("/"); fs.Next(); {
 		prt.Store(fs.Path())
@@ -159,7 +163,9 @@ func (o *Options) readFile(target string) {
 	if err != nil {
 		return
 	}
-	defer srv.Quit()
+	defer func() {
+		_ = srv.Quit()
+	}()
 
 	r, err := srv.Retr(o.srcFile)
 	if err != nil {
@@ -211,7 +217,9 @@ func (o *Options) getFile(target string) {
 	if err != nil {
 		return
 	}
-	defer srv.Quit()
+	defer func() {
+		_ = srv.Quit()
+	}()
 
 	r, err := srv.Retr(o.srcFile)
 	if err != nil {
@@ -249,7 +257,9 @@ func (o *Options) putFile(target string) {
 	if err != nil {
 		return
 	}
-	defer srv.Quit()
+	defer func() {
+		_ = srv.Quit()
+	}()
 
 	data, err := os.ReadFile(o.srcFile)
 	if err != nil {
