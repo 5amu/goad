@@ -10,6 +10,7 @@ require (
 	github.com/jcmturner/gokrb5/v8 v8.4.4
 	github.com/jlaffaye/ftp v0.2.0
 	github.com/masterzen/winrm v0.0.0-20231227165926-e811dad5ac77
+	github.com/mitchellh/go-vnc v0.0.0-20150629162542-723ed9867aed
 )
 
 require (

@@ -10,6 +10,7 @@ import (
 	"github.com/5amu/goad/internal/goad/optldap"
 	"github.com/5amu/goad/internal/goad/optsmb"
 	"github.com/5amu/goad/internal/goad/optssh"
+	"github.com/5amu/goad/internal/goad/optvnc"
 )
 
 type MainOptions struct {
@@ -20,7 +21,7 @@ type MainOptions struct {
 	//RDP   optrdp.Options   `command:"rdp" description:"Own stuff using RDP"`
 	SMB optsmb.Options `command:"smb" description:"Own stuff using SMB"`
 	SSH optssh.Options `command:"ssh" description:"Own stuff using SSH"`
-	//VNC   optvnc.Options   `command:"vnc" description:"Own stuff using VNC"`
+	VNC optvnc.Options `command:"vnc" description:"Own stuff using VNC"`
 	//WINRM optwinrm.Options `command:"winrm" description:"Own stuff using WINRM"`
 	//WMI   optwmi.Options   `command:"wmi" description:"Own stuff using WMI"`
 }
@@ -51,8 +52,6 @@ func main() {
 			//	opts.MSSQL.Run()
 			//case "rdp":
 			//  opts.RDP.Run()
-			//case "vnc":
-			//  opts.VNC.Run()
 			//case "wmi":
 			//  opts.WMI.Run()
 			//case "winrm":
@@ -65,6 +64,8 @@ func main() {
 				opts.SMB.Run()
 			case "ssh":
 				opts.SSH.Run()
+			case "vnc":
+				opts.VNC.Run()
 			}
 		}
 	}
