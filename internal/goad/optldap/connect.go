@@ -13,8 +13,15 @@ func connect(host string, port int, useSsl bool) (*ldap.Conn, error) {
 	startConn := func(ssl bool) *ldap.Conn {
 		conn, err := proxyconn.GetConnection(host, port)
 		if err != nil {
+			fmt.Println(err)
 			return nil
 		}
+		if ssl {
+			conn = tls.Client(conn, &tls.Config{
+				InsecureSkipVerify: true,
+			})
+		}
+
 		client := ldap.NewConn(conn, ssl)
 		client.Start()
 		return client
@@ -29,7 +36,6 @@ func connect(host string, port int, useSsl bool) (*ldap.Conn, error) {
 		client := startConn(useSsl)
 		if err := client.StartTLS(&tls.Config{
 			InsecureSkipVerify: true,
-			ServerName:         "",
 		}); err != nil {
 			client.Close()
 		} else {
