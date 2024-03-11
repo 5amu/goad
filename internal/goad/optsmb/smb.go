@@ -89,7 +89,8 @@ func (o *Options) authenticate(host string, port int, stopAtFirstMatch bool) (*s
 		}
 
 		initiator := smb.NTLMInitiator{
-			User: creds.Username,
+			User:   creds.Username,
+			Domain: o.Connection.Domain,
 		}
 		if creds.Hash != "" {
 			initiator.Hash = []byte(creds.Hash)

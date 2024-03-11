@@ -14,10 +14,14 @@ require (
 )
 
 require (
+	github.com/0xrawsec/golang-etw v1.6.2 // indirect
+	github.com/0xrawsec/golang-utils v1.3.1 // indirect
 	github.com/docker/go-units v0.5.0 // indirect
 	github.com/geoffgarside/ber v1.1.0 // indirect
+	github.com/ghostiam/binstruct v1.3.2 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
+	github.com/lkarlslund/binstruct v1.3.1-0.20230504093039-8f69d6d48410 // indirect
 	github.com/sirupsen/logrus v1.9.0 // indirect
 	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c // indirect
 )

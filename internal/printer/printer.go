@@ -84,7 +84,7 @@ func (p *Printer) print(symbol string, msg ...string) {
 	} else {
 		txt = p.config.OutputFormatter(message.String())
 	}
-	fmt.Fprintf(p.config.Writer, "%s%s%s\n", row.String(), symbol, txt)
+	fmt.Fprintf(p.config.Writer, "%s%s%s\n", row.String(), symbol, strings.ReplaceAll(strings.ReplaceAll(txt, "\n", ""), "\r", ""))
 }
 
 func (p *Printer) Print(msg ...string) {
@@ -186,4 +186,24 @@ func (p *Printer) PrintStored(mutex *sync.Mutex) {
 
 func (p *Printer) StoreWithoutStripping(msg ...string) {
 	p.store("", false, msg...)
+}
+
+func (p *Printer) SetModule(s string) *Printer {
+	p.module = s
+	return p
+}
+
+func (p *Printer) SetTarget(s string) *Printer {
+	p.target = s
+	return p
+}
+
+func (p *Printer) SetNebios(s string) *Printer {
+	p.netbios = s
+	return p
+}
+
+func (p *Printer) SetPort(port int) *Printer {
+	p.port = port
+	return p
 }

@@ -4,6 +4,9 @@ import (
 	"encoding/binary"
 	"fmt"
 	"reflect"
+	"unicode/utf16"
+
+	"github.com/ghostiam/binstruct"
 )
 
 func next(b []byte, pattern []byte) int {
@@ -89,4 +92,17 @@ func UnmarshalBinary(s any, d []byte) error {
 		}
 	}
 	return nil
+}
+
+func UTF16String(b []byte) string {
+	data := make([]uint16, len(b)/2)
+
+	r := binstruct.NewReaderFromBytes(b, binary.LittleEndian, false)
+
+	for i := 0; i < len(b)/2; i++ {
+		u, _ := r.ReadUint16()
+		data[i] = u
+	}
+
+	return string(utf16.Decode(data))
 }
