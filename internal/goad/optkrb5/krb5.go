@@ -12,7 +12,7 @@ import (
 	"github.com/5amu/goad/internal/printer"
 	"github.com/5amu/goad/internal/utils"
 	"github.com/5amu/goad/pkg/responder"
-	"github.com/5amu/smb"
+	"github.com/5amu/goad/pkg/smb"
 )
 
 type Options struct {

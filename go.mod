@@ -3,27 +3,31 @@ module github.com/5amu/goad
 go 1.21
 
 require (
+	github.com/0xrawsec/golang-etw v1.6.2
 	github.com/5amu/go-flags v0.0.0-20240129164246-3942f39c22b8
-	github.com/5amu/smb v0.0.0-20240308173512-c3ff299082ef
+	github.com/5amu/smb v0.0.0-20240308221359-bc8e97d8f5cc
 	github.com/fatih/color v1.16.0
+	github.com/geoffgarside/ber v1.1.0
+	github.com/ghostiam/binstruct v1.3.2
 	github.com/go-ldap/ldap/v3 v3.4.6
 	github.com/jcmturner/gokrb5/v8 v8.4.4
 	github.com/jlaffaye/ftp v0.2.0
+	github.com/lkarlslund/binstruct v1.3.1-0.20230504093039-8f69d6d48410
 	github.com/masterzen/winrm v0.0.0-20231227165926-e811dad5ac77
 	github.com/mitchellh/go-vnc v0.0.0-20150629162542-723ed9867aed
+	github.com/stretchr/testify v1.9.0
 )
 
 require (
-	github.com/0xrawsec/golang-etw v1.6.2 // indirect
 	github.com/0xrawsec/golang-utils v1.3.1 // indirect
+	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/docker/go-units v0.5.0 // indirect
-	github.com/geoffgarside/ber v1.1.0 // indirect
-	github.com/ghostiam/binstruct v1.3.2 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
-	github.com/lkarlslund/binstruct v1.3.1-0.20230504093039-8f69d6d48410 // indirect
+	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/sirupsen/logrus v1.9.0 // indirect
 	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c // indirect
+	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
 require (
@@ -35,7 +39,7 @@ require (
 	github.com/go-logr/logr v1.3.0 // indirect
 	github.com/gofrs/uuid v4.4.0+incompatible // indirect
 	github.com/google/uuid v1.3.1 // indirect
-	github.com/hashicorp/go-cleanhttp v0.5.2 // indirect
+	github.com/hashicorp/go-cleanhttp v0.5.2
 	github.com/hashicorp/go-uuid v1.0.3 // indirect
 	github.com/jcmturner/aescts/v2 v2.0.0 // indirect
 	github.com/jcmturner/dnsutils/v2 v2.0.0 // indirect
@@ -46,7 +50,7 @@ require (
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/praetorian-inc/fingerprintx v1.1.13
-	github.com/tidwall/transform v0.0.0-20201103190739-32f242e2dbde // indirect
+	github.com/tidwall/transform v0.0.0-20201103190739-32f242e2dbde
 	golang.org/x/crypto v0.21.0
 	golang.org/x/net v0.21.0
 	golang.org/x/sys v0.18.0 // indirect

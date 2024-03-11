@@ -11,7 +11,7 @@ import (
 	"github.com/5amu/goad/internal/goad/optsmb"
 	"github.com/5amu/goad/internal/printer"
 	"github.com/5amu/goad/internal/utils"
-	"github.com/5amu/smb"
+	"github.com/5amu/goad/pkg/smb"
 	"github.com/go-ldap/ldap/v3"
 )
 
