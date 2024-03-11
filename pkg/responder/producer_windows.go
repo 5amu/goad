@@ -12,7 +12,9 @@ import (
 
 func (p *Producer) GatherSMBHashes(ctx context.Context) error {
 	s := etw.NewRealTimeSession("goad-session-smb")
-	defer s.Stop()
+	defer func() {
+		_ = s.Stop()
+	}()
 
 	provider, err := etw.ParseProvider("Microsoft-Windows-SMBServer")
 	if err != nil {
@@ -24,7 +26,9 @@ func (p *Producer) GatherSMBHashes(ctx context.Context) error {
 	}
 
 	c := etw.NewRealTimeConsumer(ctx).FromSessions(s)
-	defer c.Stop()
+	defer func() {
+		_ = c.Stop()
+	}()
 
 	go func() {
 		var lastChallenge []byte
