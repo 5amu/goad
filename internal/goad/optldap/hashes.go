@@ -1,8 +1,6 @@
 package optldap
 
 import (
-	"fmt"
-
 	"github.com/5amu/goad/internal/goad/optkrb5"
 	"github.com/5amu/goad/internal/printer"
 	"github.com/5amu/goad/internal/utils"
@@ -44,7 +42,8 @@ func (o *Options) asreproast(target string) {
 			return err
 		}
 		hash := optkrb5.ASREPToHashcat(*asrep.Ticket)
-		prt.Store(name, fmt.Sprintf("%s...%s", hash[:30], hash[len(hash)-10:]))
+		//prt.Store(name, fmt.Sprintf("%s...%s", hash[:30], hash[len(hash)-10:]))
+		prt.Store(name, hash)
 		hashes = append(hashes, hash)
 		return nil
 	}, SAMAccountName)
@@ -115,7 +114,8 @@ func (o *Options) kerberoast(target string) {
 			}
 
 			hash := optkrb5.TGSToHashcat(tgs.Ticket, name)
-			prt.Store(name, fmt.Sprintf("%s...%s", hash[:30], hash[len(hash)-10:]))
+			//prt.Store(name, fmt.Sprintf("%s...%s", hash[:30], hash[len(hash)-10:]))
+			prt.Store(name, hash)
 
 			if i == 0 {
 				hashes = append(hashes, hash)
