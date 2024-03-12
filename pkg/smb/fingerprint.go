@@ -32,15 +32,6 @@ func Fingerprint(host string, port int) (*SMBFingerprint, error) {
 	return FingerprintWithDialer(host, port, d.Dial)
 }
 
-func fingerprintSignRequired(tcpConn net.Conn) bool {
-	d := &Dialer{Initiator: &NTLMInitiator{User: "whatever"}}
-	conn, err := d.Negotiator.negotiate(direct(tcpConn), openAccount(clientMaxCreditBalance), context.Background())
-	if err != nil {
-		return false
-	}
-	return conn.requireSigning
-}
-
 func FingerprintWithDialer(host string, port int, dialer func(network string, addr string) (net.Conn, error)) (*SMBFingerprint, error) {
 	conn1, err := dialer("tcp", fmt.Sprintf("%s:%d", host, port))
 	if err != nil {
@@ -51,31 +42,26 @@ func FingerprintWithDialer(host string, port int, dialer func(network string, ad
 	info.V1Support = NewV1Client().WithConn(conn1).IsSMBv1()
 	go conn1.Close()
 
-	conn2, err := dialer("tcp", fmt.Sprintf("%s:%d", host, port))
-	if err != nil {
-		return nil, err
-	}
-	info.SigningRequired = fingerprintSignRequired(conn2)
-
 	conn3, err := dialer("tcp", fmt.Sprintf("%s:%d", host, port))
 	if err != nil {
 		return nil, err
 	}
 
 	d := &Dialer{
-		Initiator: &NTLMInitiator{
-			User: "whatever",
-		},
+		Initiator: &NTLMSSPInitiator{},
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
 	_, _ = d.DialContext(ctx, conn3)
-	infomap := d.Initiator.(*NTLMInitiator).ntlm.Session().InfoMap()
-	if infomap == nil {
-		return &info, nil
-	}
+	initiator := d.Initiator.(*NTLMSSPInitiator)
 
+	info.SigningRequired = d.Negotiator.RequireMessageSigning
+
+	sd := initiator.ntlm.SessionDetails()
+	info.OSVersion = fmt.Sprintf("%d.%d.%d", sd.Version.ProductMajorVersion, sd.Version.ProductMinorVersion, sd.Version.ProductBuild)
+
+	infomap := initiator.GetInfoMap()
 	info.NetBIOSComputerName = infomap.NbComputerName
 	info.NetBIOSDomainName = infomap.NbDomainName
 	info.DNSComputerName = infomap.DnsComputerName
