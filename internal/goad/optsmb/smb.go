@@ -28,7 +28,8 @@ type Options struct {
 		Port     int    `long:"port" default:"445" description:"Provide SMB port"`
 	} `group:"Connection Options" description:"Connection Options"`
 
-	Shares bool `long:"shares" description:"list open shares"`
+	Shares  bool `long:"shares" description:"list open shares"`
+	Service bool `long:"service" description:"service test"`
 
 	credentials    []utils.Credential
 	target2SMBInfo map[string]*smb.SMBFingerprint
@@ -39,6 +40,9 @@ type Options struct {
 func (o *Options) getFunction() func(string) {
 	if o.Shares {
 		return o.enumShares
+	}
+	if o.Service {
+		return o.service
 	}
 	return func(s string) {
 		_, _, _ = o.authenticate(s, DefaultPort, false)
@@ -171,5 +175,21 @@ func (o *Options) enumShares(target string) {
 	prt.StoreSuccess("Listing shares: ")
 	for _, shareInfo := range res {
 		prt.Store(shareInfo...)
+	}
+}
+
+func (o *Options) service(target string) {
+	prt := printer.NewPrinter("SMB", target, o.target2SMBInfo[target].NetBIOSComputerName, 445)
+	defer prt.PrintStored(&o.printMutex)
+
+	s, _, err := o.authenticate(target, DefaultPort, true)
+	if err != nil {
+		prt.StoreFailure(err.Error())
+		return
+	}
+
+	if err = s.CreateService(); err != nil {
+		prt.StoreFailure(err.Error())
+		return
 	}
 }

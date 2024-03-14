@@ -142,9 +142,7 @@ func (c *Session) ListSharenames() ([]string, error) {
 		MaxInputResponse:  0,
 		MaxOutputResponse: 4280,
 		Flags:             smb2.SMB2_0_IOCTL_IS_FSCTL,
-		Input: &msrpc.Bind{
-			CallId: callId,
-		},
+		Input:             msrpc.NewRpcBindRequestHeader(callId, msrpc.SRVSVC),
 	}
 
 	output, err := f.ioctl(bindReq)
@@ -167,11 +165,7 @@ func (c *Session) ListSharenames() ([]string, error) {
 		// MaxOutputResponse: 4280,
 		MaxOutputResponse: 1024,
 		Flags:             smb2.SMB2_0_IOCTL_IS_FSCTL,
-		Input: &msrpc.NetShareEnumAllRequest{
-			CallId:     callId,
-			ServerName: servername,
-			Level:      1, // level 1 seems to be portable
-		},
+		Input:             msrpc.NewNetShareEnumAllRequest(callId, servername),
 	}
 
 	output, err = f.ioctl(reqReq)
@@ -2114,4 +2108,82 @@ func (fs *FileStat) IsDir() bool {
 
 func (fs *FileStat) Sys() interface{} {
 	return fs
+}
+
+func (c *Session) CreateService() error {
+	servername := c.addr
+
+	fs, err := c.Mount(fmt.Sprintf(`\\%s\IPC$`, servername))
+	if err != nil {
+		return err
+	}
+	defer func() {
+		_ = fs.Umount()
+	}()
+
+	fs = fs.WithContext(c.ctx)
+
+	f, err := fs.OpenFile(msrpc.SVCCTL_DLL, os.O_RDWR, 0666)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	callId := rand.Uint32()
+
+	bindReq := &smb2.IoctlRequest{
+		CtlCode:           smb2.FSCTL_PIPE_TRANSCEIVE,
+		OutputOffset:      0,
+		OutputCount:       0,
+		MaxInputResponse:  0,
+		MaxOutputResponse: 4280,
+		Flags:             smb2.SMB2_0_IOCTL_IS_FSCTL,
+		Input:             msrpc.NewRpcBindRequestHeader(callId, msrpc.NTSVCS),
+	}
+
+	output, err := f.ioctl(bindReq)
+	if err != nil {
+		return &os.PathError{Op: "createService", Path: f.name, Err: err}
+	}
+
+	r1 := msrpc.BindAckDecoder(output)
+	if r1.IsInvalid() || r1.CallId() != callId {
+		return &os.PathError{Op: "createService", Path: f.name, Err: &InvalidResponseError{"broken bind ack response format"}}
+	}
+
+	callId++
+
+	// Open SCManager
+	reqReq := &smb2.IoctlRequest{
+		CtlCode:           smb2.FSCTL_PIPE_TRANSCEIVE,
+		OutputOffset:      0,
+		OutputCount:       0,
+		MaxInputResponse:  0,
+		MaxOutputResponse: 1024,
+		Flags:             smb2.SMB2_0_IOCTL_IS_FSCTL,
+		Input: &msrpc.OpenSCManager{
+			CallId:     callId,
+			ServerName: servername,
+		},
+	}
+
+	output, err = f.ioctl(reqReq)
+	if err != nil {
+		fmt.Println(err)
+		return err
+	}
+
+	r2, err := msrpc.ParseOpenSCManagerResponse(output)
+	if err != nil {
+		fmt.Println(output)
+		fmt.Println(err)
+		return err
+	}
+
+	switch r2.ReturnCode {
+	case 5:
+		return fmt.Errorf("request OpenSCManager returned error code 5 (WERR_ACCESS_DENIED)")
+	}
+
+	return nil
 }

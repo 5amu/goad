@@ -1,165 +1,22 @@
-package smb
+package encoder
 
 import (
-	"bufio"
 	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"io"
-	"net"
 	"reflect"
 	"strconv"
 	"strings"
 )
 
-// SMBv1 is supported as far as DETECTION goes. In 2024 I'm not willing to
-// fully support it... I guess that help would be appreciated wut not actively
-// wanted. Thank you for your understanding.
-const ProtocolSmb = "\xFFSMB"
-const (
-	DialectSmb_1_0   = "\x02NT LM 0.12\x00"
-	DialectSmb_2_0_2 = "\x02SMB 2.002\x00"
-	DialectSmb_2_Wld = "\x02SMB 2.???\x00"
-)
-
-type HeaderV1 struct {
-	ProtocolID       []byte `smb:"fixed:4"`
-	Command          uint8
-	Status           uint32
-	Flags            uint8
-	Flags2           uint16
-	PIDHigh          uint16
-	SecurityFeatures []byte `smb:"fixed:8"`
-	Reserved         uint16
-	TID              uint16
-	PIDLow           uint16
-	UID              uint16
-	MID              uint16
+type BinaryMarshallable interface {
+	MarshalBinary(*Metadata) ([]byte, error)
+	UnmarshalBinary([]byte, *Metadata) error
 }
 
-type NegotiateReqV1 struct {
-	HeaderV1
-	WordCount uint8
-	ByteCount uint16  // hardcoded to 14
-	Dialects  []uint8 `smb:"fixed:12"`
-}
-
-type V1Client struct {
-	Host      string
-	Port      int
-	Conn      net.Conn
-	messageId int
-}
-
-func NewV1Client() *V1Client {
-	return &V1Client{}
-}
-
-func (c *V1Client) WithHostPort(host string, port int) *V1Client {
-	c.Host = host
-	c.Port = port
-	return c
-}
-
-func (c *V1Client) WithConn(conn net.Conn) *V1Client {
-	c.Conn = conn
-	return c
-}
-
-func (c *V1Client) IsSMBv1() bool {
-	if c.Conn == nil {
-		var err error
-		c.Conn, err = net.Dial("tcp", fmt.Sprintf("%s:%d", c.Host, c.Port))
-		if err != nil {
-			return false
-		}
-	}
-
-	c.messageId = 0
-	req := NegotiateReqV1{
-		HeaderV1: HeaderV1{
-			ProtocolID:       []byte(ProtocolSmb),
-			Command:          0x72, //SMB1 Negotiate
-			Status:           0,
-			Flags:            0x18,
-			Flags2:           0xc801,
-			PIDHigh:          0,
-			SecurityFeatures: []byte{0, 0, 0, 0, 0, 0, 0, 0},
-			Reserved:         0,
-			TID:              0xffff,
-			PIDLow:           0,
-			UID:              0,
-			MID:              0,
-		},
-		WordCount: 0,
-		ByteCount: 34,
-		Dialects: append(
-			append([]uint8(DialectSmb_1_0),
-				[]uint8(DialectSmb_2_0_2)...,
-			),
-			[]uint8(DialectSmb_2_Wld)...,
-		),
-	}
-
-	buf, err := send(c.Conn, req)
-	if err != nil {
-		return false
-	}
-	return string(buf[0:4]) == ProtocolSmb
-}
-
-func send(conn net.Conn, req interface{}) (res []byte, err error) {
-	buf, err := marshal(req, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	b := new(bytes.Buffer)
-	if err = binary.Write(b, binary.BigEndian, uint32(len(buf))); err != nil {
-		return nil, err
-	}
-
-	rw := bufio.NewReadWriter(bufio.NewReader(conn), bufio.NewWriter(conn))
-	if _, err = rw.Write(append(b.Bytes(), buf...)); err != nil {
-		return nil, err
-	}
-	rw.Flush()
-
-	var size uint32
-	if err = binary.Read(rw, binary.BigEndian, &size); err != nil {
-		return
-	}
-	if size > 0x00FFFFFF || size < 4 {
-		return nil, fmt.Errorf("invalid NetBIOS session message")
-	}
-
-	data := make([]byte, size)
-	l, err := io.ReadFull(rw, data)
-	if err != nil {
-		return nil, err
-	}
-	if uint32(l) != size {
-		return nil, fmt.Errorf("message size invalid")
-	}
-
-	protID := data[0:4]
-	switch string(protID) {
-	default:
-		return nil, fmt.Errorf("protocol not recognized")
-	case ProtocolSmb:
-	}
-
-	return data, nil
-}
-
-type BinaryMarshallableV1 interface {
-	MarshalBinary(*MetadataV1) ([]byte, error)
-	UnmarshalBinary([]byte, *MetadataV1) error
-}
-
-type MetadataV1 struct {
-	Tags       *TagMapV1
+type Metadata struct {
+	Tags       *TagMap
 	Lens       map[string]uint64
 	Offsets    map[string]uint64
 	Parent     interface{}
@@ -168,40 +25,40 @@ type MetadataV1 struct {
 	CurrField  string
 }
 
-type TagMapV1 struct {
+type TagMap struct {
 	m   map[string]interface{}
 	has map[string]bool
 }
 
-func (t TagMapV1) Has(key string) bool {
+func (t TagMap) Has(key string) bool {
 	return t.has[key]
 }
 
-func (t TagMapV1) Set(key string, val interface{}) {
+func (t TagMap) Set(key string, val interface{}) {
 	t.m[key] = val
 	t.has[key] = true
 }
 
-func (t TagMapV1) Get(key string) interface{} {
+func (t TagMap) Get(key string) interface{} {
 	return t.m[key]
 }
 
-func (t TagMapV1) GetInt(key string) (int, error) {
+func (t TagMap) GetInt(key string) (int, error) {
 	if !t.Has(key) {
-		return 0, fmt.Errorf("key does not exist in tag")
+		return 0, errors.New("key does not exist in tag")
 	}
 	return t.Get(key).(int), nil
 }
 
-func (t TagMapV1) GetString(key string) (string, error) {
+func (t TagMap) GetString(key string) (string, error) {
 	if !t.Has(key) {
-		return "", fmt.Errorf("key does not exist in tag")
+		return "", errors.New("key does not exist in tag")
 	}
 	return t.Get(key).(string), nil
 }
 
-func parseTags(sf reflect.StructField) (*TagMapV1, error) {
-	ret := &TagMapV1{
+func parseTags(sf reflect.StructField) (*TagMap, error) {
+	ret := &TagMap{
 		m:   make(map[string]interface{}),
 		has: make(map[string]bool),
 	}
@@ -232,7 +89,7 @@ func parseTags(sf reflect.StructField) (*TagMapV1, error) {
 	return ret, nil
 }
 
-func getOffsetByFieldName(fieldName string, meta *MetadataV1) (uint64, error) {
+func getOffsetByFieldName(fieldName string, meta *Metadata) (uint64, error) {
 	if meta == nil || meta.Tags == nil || meta.Parent == nil || meta.Lens == nil {
 		return 0, errors.New("cannot determine field offset. Missing required metadata")
 	}
@@ -252,7 +109,7 @@ func getOffsetByFieldName(fieldName string, meta *MetadataV1) (uint64, error) {
 			ret += l
 		} else {
 			// Not in cache. Must marshal field to determine length. Add to cache after
-			buf, err := marshal(parentvf.Field(i).Interface(), nil)
+			buf, err := Marshal(parentvf.Field(i).Interface())
 			if err != nil {
 				return 0, err
 			}
@@ -267,7 +124,7 @@ func getOffsetByFieldName(fieldName string, meta *MetadataV1) (uint64, error) {
 	return ret, nil
 }
 
-func getFieldLengthByName(fieldName string, meta *MetadataV1) (uint64, error) {
+func getFieldLengthByName(fieldName string, meta *Metadata) (uint64, error) {
 	var ret uint64
 	if meta == nil || meta.Tags == nil || meta.Parent == nil || meta.Lens == nil {
 		return 0, errors.New("cannot determine field length. Missing required metadata")
@@ -285,7 +142,7 @@ func getFieldLengthByName(fieldName string, meta *MetadataV1) (uint64, error) {
 		return 0, errors.New("invalid field. Cannot determine length")
 	}
 
-	bm, ok := field.Interface().(BinaryMarshallableV1)
+	bm, ok := field.Interface().(BinaryMarshallable)
 	if ok {
 		// Custom marshallable interface found.
 		buf, err := bm.MarshalBinary(meta)
@@ -301,7 +158,7 @@ func getFieldLengthByName(fieldName string, meta *MetadataV1) (uint64, error) {
 
 	switch field.Kind() {
 	case reflect.Struct:
-		buf, err := marshal(field.Interface(), nil)
+		buf, err := Marshal(field.Interface())
 		if err != nil {
 			return 0, err
 		}
@@ -330,12 +187,16 @@ func getFieldLengthByName(fieldName string, meta *MetadataV1) (uint64, error) {
 	return ret, nil
 }
 
-func marshal(v interface{}, meta *MetadataV1) ([]byte, error) {
+func Marshal(v interface{}) ([]byte, error) {
+	return marshal(v, nil)
+}
+
+func marshal(v interface{}, meta *Metadata) ([]byte, error) {
 	var ret []byte
 	tf := reflect.TypeOf(v)
 	vf := reflect.ValueOf(v)
 
-	bm, ok := v.(BinaryMarshallableV1)
+	bm, ok := v.(BinaryMarshallable)
 	if ok {
 		// Custom marshallable interface found.
 		buf, err := bm.MarshalBinary(meta)
@@ -353,8 +214,8 @@ func marshal(v interface{}, meta *MetadataV1) ([]byte, error) {
 	w := bytes.NewBuffer(ret)
 	switch tf.Kind() {
 	case reflect.Struct:
-		m := &MetadataV1{
-			Tags:   &TagMapV1{},
+		m := &Metadata{
+			Tags:   &TagMap{},
 			Lens:   make(map[string]uint64),
 			Parent: v,
 		}
@@ -450,4 +311,160 @@ func marshal(v interface{}, meta *MetadataV1) ([]byte, error) {
 		return nil, fmt.Errorf("marshal not implemented for kind: %s", tf.Kind())
 	}
 	return w.Bytes(), nil
+}
+
+func unmarshal(buf []byte, v interface{}, meta *Metadata) (interface{}, error) {
+	tf := reflect.TypeOf(v)
+	vf := reflect.ValueOf(v)
+
+	bm, ok := v.(BinaryMarshallable)
+	if ok {
+		// Custom marshallable interface found.
+		if err := bm.UnmarshalBinary(buf, meta); err != nil {
+			return nil, err
+		}
+		return bm, nil
+	}
+
+	if tf.Kind() == reflect.Ptr {
+		vf = reflect.ValueOf(v).Elem()
+		tf = vf.Type()
+	}
+
+	if meta == nil {
+		meta = &Metadata{
+			Tags:       &TagMap{},
+			Lens:       make(map[string]uint64),
+			Parent:     v,
+			ParentBuf:  buf,
+			Offsets:    make(map[string]uint64),
+			CurrOffset: 0,
+		}
+	}
+
+	r := bytes.NewBuffer(buf)
+	switch tf.Kind() {
+	case reflect.Struct:
+		m := &Metadata{
+			Tags:       &TagMap{},
+			Lens:       make(map[string]uint64),
+			Parent:     v,
+			ParentBuf:  buf,
+			Offsets:    make(map[string]uint64),
+			CurrOffset: 0,
+		}
+		for i := 0; i < tf.NumField(); i++ {
+			m.CurrField = tf.Field(i).Name
+			tags, err := parseTags(tf.Field(i))
+			if err != nil {
+				return nil, err
+			}
+			m.Tags = tags
+			var data interface{}
+			switch tf.Field(i).Type.Kind() {
+			case reflect.Struct:
+				data, err = unmarshal(buf[m.CurrOffset:], vf.Field(i).Addr().Interface(), m)
+			default:
+				data, err = unmarshal(buf[m.CurrOffset:], vf.Field(i).Interface(), m)
+			}
+			if err != nil {
+				return nil, err
+			}
+			vf.Field(i).Set(reflect.ValueOf(data))
+		}
+		v = reflect.Indirect(reflect.ValueOf(v)).Interface()
+		meta.CurrOffset += m.CurrOffset
+		return v, nil
+	case reflect.Uint8:
+		var ret uint8
+		if err := binary.Read(r, binary.LittleEndian, &ret); err != nil {
+			return nil, err
+		}
+		meta.CurrOffset += uint64(binary.Size(ret))
+		return ret, nil
+	case reflect.Uint16:
+		var ret uint16
+		if err := binary.Read(r, binary.LittleEndian, &ret); err != nil {
+			return nil, err
+		}
+		if meta.Tags.Has("len") {
+			ref, err := meta.Tags.GetString("len")
+			if err != nil {
+				return nil, err
+			}
+			meta.Lens[ref] = uint64(ret)
+		}
+		meta.CurrOffset += uint64(binary.Size(ret))
+		return ret, nil
+	case reflect.Uint32:
+		var ret uint32
+		if err := binary.Read(r, binary.LittleEndian, &ret); err != nil {
+			return nil, err
+		}
+		if meta.Tags.Has("offset") {
+			ref, err := meta.Tags.GetString("offset")
+			if err != nil {
+				return nil, err
+			}
+			meta.Offsets[ref] = uint64(ret)
+		}
+		meta.CurrOffset += uint64(binary.Size(ret))
+		return ret, nil
+	case reflect.Uint64:
+		var ret uint64
+		if err := binary.Read(r, binary.LittleEndian, &ret); err != nil {
+			return nil, err
+		}
+		meta.CurrOffset += uint64(binary.Size(ret))
+		return ret, nil
+	case reflect.Slice, reflect.Array:
+		switch tf.Elem().Kind() {
+		case reflect.Uint8:
+			var l, o int
+			var err error
+			if meta.Tags.Has("fixed") {
+				if l, err = meta.Tags.GetInt("fixed"); err != nil {
+					return nil, err
+				}
+				// Fixed length fields advance current offset
+				meta.CurrOffset += uint64(l)
+			} else {
+				if val, ok := meta.Lens[meta.CurrField]; ok {
+					l = int(val)
+				} else {
+					return nil, errors.New("Variable length field missing length reference in struct: " + meta.CurrField)
+				}
+				if val, ok := meta.Offsets[meta.CurrField]; ok {
+					o = int(val)
+				} else {
+					// No offset found in map. Use current offset
+					o = int(meta.CurrOffset)
+				}
+				// Prevent searching past the end of the buffer for variable data
+				if o+l > len(meta.ParentBuf) {
+					return nil, fmt.Errorf("field '%s' wants %d bytes but only %d bytes remain", meta.CurrField, l, len(meta.ParentBuf)-o)
+				}
+				// Variable length data is relative to parent/outer struct. Reset reader to point to beginning of data
+				r = bytes.NewBuffer(meta.ParentBuf[o : o+l])
+				// Variable length data fields do NOT advance current offset.
+			}
+			data := make([]byte, l)
+			if err := binary.Read(r, binary.LittleEndian, &data); err != nil {
+				return nil, err
+			}
+			return data, nil
+		case reflect.Uint16:
+			return errors.New("unmarshal not implemented for slice kind:" + tf.Kind().String()), nil
+		}
+	default:
+		return errors.New("unmarshal not implemented for kind:" + tf.Kind().String()), nil
+	}
+
+	return nil, nil
+
+}
+
+func Unmarshal(buf []byte, v interface{}) error {
+	_, err := unmarshal(buf, v, nil)
+	return err
 }

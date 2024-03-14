@@ -106,7 +106,11 @@ func (i *NTLMSSPInitiator) GetInfoMap() *NTLMSSPInfoMap {
 }
 
 func (i *NTLMSSPInitiator) initSecContext() (_ []byte, err error) {
-	i.ntlm, err = ntlmssp.NewClient(ntlmssp.SetCompatibilityLevel(1), ntlmssp.SetUserInfo(i.User, i.Password), ntlmssp.SetDomain("NT AUTHORITY"))
+	i.ntlm, err = ntlmssp.NewClient(
+		ntlmssp.SetCompatibilityLevel(1),
+		ntlmssp.SetUserInfo(i.User, i.Password),
+		ntlmssp.SetDomain(""),
+	)
 	if err != nil {
 		return nil, err
 	}
