@@ -2110,27 +2110,20 @@ func (fs *FileStat) Sys() interface{} {
 	return fs
 }
 
-func (c *Session) CreateService() error {
+func (c *Session) GetNamedPipe(fname string) (*File, error) {
 	servername := c.addr
-
 	fs, err := c.Mount(fmt.Sprintf(`\\%s\IPC$`, servername))
 	if err != nil {
-		return err
+		return nil, err
 	}
-	defer func() {
-		_ = fs.Umount()
-	}()
-
 	fs = fs.WithContext(c.ctx)
 
 	f, err := fs.OpenFile(msrpc.SVCCTL_DLL, os.O_RDWR, 0666)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	defer f.Close()
 
-	callId := rand.Uint32()
-
+	var callId uint32 = 0
 	bindReq := &smb2.IoctlRequest{
 		CtlCode:           smb2.FSCTL_PIPE_TRANSCEIVE,
 		OutputOffset:      0,
@@ -2143,47 +2136,87 @@ func (c *Session) CreateService() error {
 
 	output, err := f.ioctl(bindReq)
 	if err != nil {
-		return &os.PathError{Op: "createService", Path: f.name, Err: err}
+		return nil, &os.PathError{Op: "createService", Path: f.name, Err: err}
 	}
 
 	r1 := msrpc.BindAckDecoder(output)
 	if r1.IsInvalid() || r1.CallId() != callId {
-		return &os.PathError{Op: "createService", Path: f.name, Err: &InvalidResponseError{"broken bind ack response format"}}
+		return nil, &os.PathError{Op: "createService", Path: f.name, Err: &InvalidResponseError{"broken bind ack response format"}}
+	}
+	return f, nil
+}
+
+func (c *Session) OpenSCManager(np *File, callId *uint32) ([]byte, error) {
+	openSCManager := &msrpc.OpenSCManager{
+		CallId:     *callId,
+		ServerName: c.addr,
+	}
+	buf := make([]byte, openSCManager.Size())
+	openSCManager.Encode(buf)
+
+	writeReq := &smb2.WriteRequest{
+		FileId:           np.fd,
+		Flags:            0,
+		Channel:          0,
+		RemainingBytes:   0,
+		Offset:           0,
+		WriteChannelInfo: []smb2.Encoder{},
+		Data:             buf,
 	}
 
-	callId++
-
-	// Open SCManager
-	reqReq := &smb2.IoctlRequest{
-		CtlCode:           smb2.FSCTL_PIPE_TRANSCEIVE,
-		OutputOffset:      0,
-		OutputCount:       0,
-		MaxInputResponse:  0,
-		MaxOutputResponse: 1024,
-		Flags:             smb2.SMB2_0_IOCTL_IS_FSCTL,
-		Input: &msrpc.OpenSCManager{
-			CallId:     callId,
-			ServerName: servername,
-		},
+	var err error
+	writeReq.CreditCharge, _, err = np.fs.loanCredit(writeReq.Size())
+	if err != nil {
+		return nil, err
 	}
+	np.fs.chargeCredit(writeReq.CreditCharge)
 
-	output, err = f.ioctl(reqReq)
+	writeRes, err := np.sendRecv(smb2.SMB2_WRITE, writeReq)
 	if err != nil {
 		fmt.Println(err)
-		return err
+		return nil, err
 	}
 
-	r2, err := msrpc.ParseOpenSCManagerResponse(output)
+	if smb2.WriteResponseDecoder(writeRes).IsInvalid() {
+		return nil, fmt.Errorf("invalid write response")
+	}
+
+	buf = make([]byte, 1048576)
+	l, err := np.Read(buf)
 	if err != nil {
-		fmt.Println(output)
-		fmt.Println(err)
-		return err
+		return nil, err
 	}
 
-	switch r2.ReturnCode {
+	res, err := msrpc.ParseOpenSCManagerResponse(buf[:l])
+	if err != nil {
+		fmt.Println(err)
+		return nil, err
+	}
+	switch res.ReturnCode {
 	case 5:
-		return fmt.Errorf("request OpenSCManager returned error code 5 (WERR_ACCESS_DENIED)")
+		return nil, fmt.Errorf("request OpenSCManager returned error code 5 (WERR_ACCESS_DENIED)")
+	case 0:
+		return res.ContextHandle, nil
 	}
+	return nil, fmt.Errorf("request OpenSCManager returned error code %d (?)", res.ReturnCode)
+}
+
+func (c *Session) CreateService() error {
+	f, err := c.GetNamedPipe(msrpc.SVCCTL_DLL)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		_ = f.Close()
+		_ = f.fs.Umount()
+	}()
+
+	var callId = uint32(1)
+	blob, err := c.OpenSCManager(f, &callId)
+	if err != nil {
+		return err
+	}
+	fmt.Println(blob)
 
 	return nil
 }

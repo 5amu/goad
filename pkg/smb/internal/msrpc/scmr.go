@@ -2,6 +2,7 @@ package msrpc
 
 import (
 	"github.com/5amu/goad/pkg/encoder"
+	"github.com/5amu/goad/pkg/smb/internal/utf16le"
 )
 
 // e1af8308-5d1f-11c9-91a4-08002b14a0fa
@@ -13,7 +14,7 @@ const (
 	SVCCTL_VERSION       = 2
 	SVCCTL_VERSION_MINOR = 0
 
-	SVCCTL_DLL = "ntsvcs"
+	SVCCTL_DLL = "svcctl"
 )
 
 // opnum
@@ -91,10 +92,19 @@ type MachineNameStruct struct {
 	Reserved    uint16
 }
 
+type SVCCTLHandleStruct struct {
+	ReferentId  uint32
+	MaxCount    uint32
+	Offset      uint32
+	ActualCount uint32
+	Data        []byte
+}
+
 // https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-scmr/dc84adb3-d51d-48eb-820d-ba1c6ca5faf2
 type ROpenSCManagerRequest struct {
-	MachineName  uint32
-	DatabaseName []byte
+	MachineName  SVCCTLHandleStruct
+	DatabaseName SVCCTLHandleStruct
+	Reserved     uint16
 	AccessMask   uint32
 }
 
@@ -114,12 +124,29 @@ type OpenSCManager struct {
 }
 
 func (r *OpenSCManager) Size() int {
-	off := 12 // fixed bytes
-	off += 24 // header
-	return off
+	off := utf16le.EncodedStringLen(r.ServerName) + 2
+	off += utf16le.EncodedStringLen("ServicesActive") + 2
+
+	off += 16      // Rpc base header
+	off += 2       // context ID
+	off += 2       // Opnum
+	off += 16 + 16 // fixed bytes of the 2 handles
+	off += 4       // access mask
+	off += 4
+	return roundup(off, 4)
 }
 
 func (r *OpenSCManager) Encode(b []byte) {
+	var srvname []byte = make([]byte, utf16le.EncodedStringLen(r.ServerName))
+	utf16le.EncodeString(srvname, r.ServerName)
+	srvname = append(srvname, []byte{0, 0}...)
+	var srvcount int = utf16le.EncodedStringLen(r.ServerName)/2 + 1
+
+	var dbname []byte = make([]byte, utf16le.EncodedStringLen("ServicesActive"))
+	utf16le.EncodeString(dbname, "ServicesActive")
+	dbname = append(dbname, []byte{0, 0}...)
+	var dbcount int = utf16le.EncodedStringLen("ServicesActive")/2 + 1
+
 	req := RpcRequestStruct{
 		RpcHeaderStruct: RpcHeaderStruct{
 			RpcVersion:         RPC_VERSION,
@@ -133,9 +160,22 @@ func (r *OpenSCManager) Encode(b []byte) {
 		ContextID: 0,
 		OpNum:     ROpenSCManagerW,
 		Payload: ROpenSCManagerRequest{
-			MachineName:  0,
-			DatabaseName: []byte{0, 0, 0, 0},
-			AccessMask:   SERVICE_ALL_ACCESS,
+			MachineName: SVCCTLHandleStruct{
+				ReferentId:  0x000074b2,
+				MaxCount:    uint32(srvcount),
+				Offset:      0,
+				ActualCount: uint32(srvcount),
+				Data:        srvname,
+			},
+			DatabaseName: SVCCTLHandleStruct{
+				ReferentId:  0x0000d128,
+				MaxCount:    uint32(dbcount),
+				Offset:      0,
+				ActualCount: uint32(dbcount),
+				Data:        dbname,
+			},
+			Reserved:   0xbfbf,
+			AccessMask: SERVICE_ALL_ACCESS,
 		},
 	}
 	copy(b, req.Bytes())
