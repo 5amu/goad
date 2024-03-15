@@ -55,10 +55,12 @@ func FingerprintWithDialer(host string, port int, dialer func(network string, ad
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	_, _ = d.DialContext(ctx, conn3)
+	s, _ := d.DialContext(ctx, conn3)
 	initiator := d.Initiator.(*NTLMSSPInitiator)
 
-	info.SigningRequired = d.Negotiator.RequireMessageSigning
+	if s.s != nil {
+		info.SigningRequired = s.s.requireSigning
+	}
 
 	sd := initiator.ntlm.SessionDetails()
 	info.OSVersion = fmt.Sprintf("%d.%d.%d", sd.Version.ProductMajorVersion, sd.Version.ProductMinorVersion, sd.Version.ProductBuild)
