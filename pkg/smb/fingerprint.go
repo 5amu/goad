@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net"
 	"time"
+
+	"github.com/5amu/goad/pkg/smb/internal/utf16le"
 )
 
 type SMBFingerprint struct {
@@ -62,10 +64,10 @@ func FingerprintWithDialer(host string, port int, dialer func(network string, ad
 	info.OSVersion = fmt.Sprintf("%d.%d.%d", sd.Version.ProductMajorVersion, sd.Version.ProductMinorVersion, sd.Version.ProductBuild)
 
 	infomap := initiator.GetInfoMap()
-	info.NetBIOSComputerName = infomap.NbComputerName
-	info.NetBIOSDomainName = infomap.NbDomainName
-	info.DNSComputerName = infomap.DnsComputerName
-	info.DNSDomainName = infomap.DnsDomainName
-	info.ForestName = infomap.DnsTreeName
+	info.NetBIOSComputerName = utf16le.DecodeToString([]byte(infomap.NbComputerName))
+	info.NetBIOSDomainName = utf16le.DecodeToString([]byte(infomap.NbDomainName))
+	info.DNSComputerName = utf16le.DecodeToString([]byte(infomap.DnsComputerName))
+	info.DNSDomainName = utf16le.DecodeToString([]byte(infomap.DnsDomainName))
+	info.ForestName = utf16le.DecodeToString([]byte(infomap.DnsTreeName))
 	return &info, nil
 }
