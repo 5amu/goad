@@ -445,7 +445,7 @@ func (conn *conn) makeRequestResponse(req smb2.Packet, tc *treeConn, ctx context
 
 	if s != nil {
 		if _, ok := req.(*smb2.SessionSetupRequest); !ok {
-			if s.sessionFlags&smb2.SMB2_SESSION_FLAG_ENCRYPT_DATA != 0 || (tc != nil && tc.shareFlags&smb2.SMB2_SHAREFLAG_ENCRYPT_DATA != 0) {
+			if s.sessionFlags&smb2.SMB2_SESSION_FLAG_ENCRYPT_DATA == 0 || (tc != nil && tc.shareFlags&smb2.SMB2_SHAREFLAG_ENCRYPT_DATA != 0) {
 				pkt, err = s.encrypt(pkt)
 				if err != nil {
 					return nil, &InternalError{err.Error()}
