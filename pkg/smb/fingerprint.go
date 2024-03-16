@@ -58,8 +58,10 @@ func FingerprintWithDialer(host string, port int, dialer func(network string, ad
 	s, _ := d.DialContext(ctx, conn3)
 	initiator := d.Initiator.(*NTLMSSPInitiator)
 
-	if s.s != nil {
-		info.SigningRequired = s.s.requireSigning
+	if s != nil {
+		if s.s != nil {
+			info.SigningRequired = s.s.requireSigning
+		}
 	}
 
 	sd := initiator.ntlm.SessionDetails()

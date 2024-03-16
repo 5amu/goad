@@ -62,7 +62,6 @@ func GetSMBInfo(host string, port int) (f *smb.SMBFingerprint) {
 	go func() {
 		fingerprint, err := smb.FingerprintWithDialer(host, port, proxyconn.GetDialFunc())
 		if err != nil {
-			fmt.Println(err)
 			fchan <- nil
 		}
 		fchan <- fingerprint
