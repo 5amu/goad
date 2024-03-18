@@ -8,10 +8,12 @@ import (
 
 func Search(c *ldap.Conn, domain string, filter string, attributes ...string) (*ldap.SearchResult, error) {
 	basedn := toDN(domain)
-	return c.Search(ldap.NewSearchRequest(
+	return c.SearchWithPaging(ldap.NewSearchRequest(
 		basedn, ldap.ScopeWholeSubtree, ldap.NeverDerefAliases,
 		0, 0, false, filter, attributes, nil,
-	))
+	),
+		1000,
+	)
 }
 
 func FindObjects(c *ldap.Conn, domain string, filter string, attributes ...string) ([]map[string]interface{}, error) {
