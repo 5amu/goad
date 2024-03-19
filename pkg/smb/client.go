@@ -2,6 +2,7 @@ package smb
 
 import (
 	"context"
+	"encoding/binary"
 	"fmt"
 	"io"
 	"math/rand"
@@ -77,6 +78,12 @@ type Session struct {
 	s    *session
 	ctx  context.Context
 	addr string
+}
+
+func (c *Session) GetSessionID() []byte {
+	b := make([]byte, 8)
+	binary.LittleEndian.PutUint64(b, c.s.sessionId)
+	return b
 }
 
 func (c *Session) WithContext(ctx context.Context) *Session {
@@ -2124,22 +2131,42 @@ func (c *Session) GetNamedPipe(fname string) (*File, error) {
 	}
 
 	var callId uint32 = 0
-	bindReq := &smb2.IoctlRequest{
-		CtlCode:           smb2.FSCTL_PIPE_TRANSCEIVE,
-		OutputOffset:      0,
-		OutputCount:       0,
-		MaxInputResponse:  0,
-		MaxOutputResponse: 4280,
-		Flags:             smb2.SMB2_0_IOCTL_IS_FSCTL,
-		Input:             msrpc.NewRpcBindRequestHeader(callId, msrpc.NTSVCS),
+	rpcBind := msrpc.NewRpcBindRequestHeader(callId, msrpc.NTSVCS)
+	buf := make([]byte, rpcBind.Size())
+	rpcBind.Encode(buf)
+
+	writeReq := &smb2.WriteRequest{
+		FileId:           f.fd,
+		Flags:            0,
+		Channel:          0,
+		RemainingBytes:   0,
+		Offset:           0,
+		WriteChannelInfo: []smb2.Encoder{},
+		Data:             buf,
 	}
 
-	output, err := f.ioctl(bindReq)
+	writeReq.CreditCharge, _, err = f.fs.loanCredit(writeReq.Size())
+	if err != nil {
+		return nil, err
+	}
+	f.fs.chargeCredit(writeReq.CreditCharge)
+
+	writeRes, err := f.sendRecv(smb2.SMB2_WRITE, writeReq)
 	if err != nil {
 		return nil, &os.PathError{Op: "createService", Path: f.name, Err: err}
 	}
 
-	r1 := msrpc.BindAckDecoder(output)
+	if smb2.WriteResponseDecoder(writeRes).IsInvalid() {
+		return nil, fmt.Errorf("invalid write response")
+	}
+
+	buf = make([]byte, 1048576)
+	l, err := f.Read(buf)
+	if err != nil {
+		return nil, err
+	}
+
+	r1 := msrpc.BindAckDecoder(buf[:l])
 	if r1.IsInvalid() || r1.CallId() != callId {
 		return nil, &os.PathError{Op: "createService", Path: f.name, Err: &InvalidResponseError{"broken bind ack response format"}}
 	}

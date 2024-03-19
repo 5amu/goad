@@ -93,8 +93,9 @@ func (o *Options) authenticate(host string, port int, stopAtFirstMatch bool) (*s
 		}
 
 		initiator := smb.NTLMInitiator{
-			User:   creds.Username,
-			Domain: o.Connection.Domain,
+			User:      creds.Username,
+			Domain:    domain,
+			TargetSPN: "cifs/" + o.target2SMBInfo[host].NetBIOSComputerName,
 		}
 		if creds.Hash != "" {
 			initiator.Hash = []byte(creds.Hash)
@@ -104,13 +105,16 @@ func (o *Options) authenticate(host string, port int, stopAtFirstMatch bool) (*s
 
 		s, err := (&smb.Dialer{Initiator: &initiator}).DialContext(context.TODO(), conn)
 		if err == nil {
+			if stopAtFirstMatch {
+				if sid := s.GetSessionID(); sid != nil {
+					prt.StoreInfo("SMB2 Session ID: " + color.HiMagentaString("%x", sid))
+				}
+				return s, creds, nil
+			}
 			if IsAdminShareWritable(s) {
 				prt.StoreSuccess(creds.StringWithDomain(domain) + color.YellowString(" (Pwn3d!)"))
 			} else {
 				prt.StoreSuccess(creds.StringWithDomain(domain))
-			}
-			if stopAtFirstMatch {
-				return s, creds, nil
 			}
 			valid = true
 		}

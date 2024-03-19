@@ -445,14 +445,13 @@ func (conn *conn) makeRequestResponse(req smb2.Packet, tc *treeConn, ctx context
 
 	if s != nil {
 		if _, ok := req.(*smb2.SessionSetupRequest); !ok {
+			if s.sessionFlags&(smb2.SMB2_SESSION_FLAG_IS_GUEST|smb2.SMB2_SESSION_FLAG_IS_NULL) == 0 {
+				pkt = s.sign(pkt)
+			}
 			if s.sessionFlags&smb2.SMB2_SESSION_FLAG_ENCRYPT_DATA == 0 || (tc != nil && tc.shareFlags&smb2.SMB2_SHAREFLAG_ENCRYPT_DATA != 0) {
 				pkt, err = s.encrypt(pkt)
 				if err != nil {
 					return nil, &InternalError{err.Error()}
-				}
-			} else {
-				if s.sessionFlags&(smb2.SMB2_SESSION_FLAG_IS_GUEST|smb2.SMB2_SESSION_FLAG_IS_NULL) == 0 {
-					pkt = s.sign(pkt)
 				}
 			}
 		}
