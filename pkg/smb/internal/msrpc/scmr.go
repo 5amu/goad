@@ -93,7 +93,7 @@ type MachineNameStruct struct {
 }
 
 type SVCCTLHandleStruct struct {
-	ReferentId  uint32
+	ReferentId  uint32 `smb:"offset:Data"`
 	MaxCount    uint32
 	Offset      uint32
 	ActualCount uint32
@@ -161,21 +161,19 @@ func (r *OpenSCManager) Encode(b []byte) {
 		OpNum:     ROpenSCManagerW,
 		Payload: ROpenSCManagerRequest{
 			MachineName: SVCCTLHandleStruct{
-				ReferentId:  0x000074b2,
 				MaxCount:    uint32(srvcount),
 				Offset:      0,
 				ActualCount: uint32(srvcount),
 				Data:        srvname,
 			},
 			DatabaseName: SVCCTLHandleStruct{
-				ReferentId:  0x0000d128,
 				MaxCount:    uint32(dbcount),
 				Offset:      0,
 				ActualCount: uint32(dbcount),
 				Data:        dbname,
 			},
 			Reserved:   0xbfbf,
-			AccessMask: SERVICE_ALL_ACCESS,
+			AccessMask: SC_MANAGER_CREATE_SERVICE | SC_MANAGER_CONNECT,
 		},
 	}
 	copy(b, req.Bytes())
