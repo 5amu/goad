@@ -142,9 +142,7 @@ func (o *Options) parallelExecution(runner func(string)) {
 	for target := range o.target2SMBInfo {
 		wg.Add(1)
 		go func(t string) {
-			if IsLDAP(t, o.Connection.Port, o.Connection.SSL) {
-				runner(t)
-			}
+			runner(t)
 			wg.Done()
 		}(target)
 	}

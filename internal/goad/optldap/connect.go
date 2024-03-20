@@ -10,44 +10,45 @@ import (
 )
 
 func connect(host string, port int, useSsl bool) (*ldap.Conn, error) {
-	startConn := func(ssl bool) *ldap.Conn {
+	ch := make(chan *ldap.Conn)
+	er := make(chan error)
+	go func() {
 		conn, err := proxyconn.GetConnection(host, port)
 		if err != nil {
-			fmt.Println(err)
-			return nil
+			er <- err
+			return
 		}
-		if ssl {
-			conn = tls.Client(conn, &tls.Config{
-				InsecureSkipVerify: true,
-			})
-		}
-
-		client := ldap.NewConn(conn, ssl)
-		client.Start()
-		return client
-	}
-
-	if useSsl {
-		return startConn(useSsl), nil
-	}
-
-	ch := make(chan *ldap.Conn)
-	go func() {
-		client := startConn(useSsl)
-		if err := client.StartTLS(&tls.Config{
-			InsecureSkipVerify: true,
-		}); err != nil {
-			client.Close()
-		} else {
+		if useSsl {
+			conn = tls.Client(conn, &tls.Config{InsecureSkipVerify: true})
+			client := ldap.NewConn(conn, true)
+			client.Start()
 			ch <- client
+			return
 		}
+		client := ldap.NewConn(conn, false)
+		client.Start()
+		if err := client.StartTLS(&tls.Config{InsecureSkipVerify: true}); err == nil {
+			ch <- client
+			return
+		}
+		client.Close()
+
+		conn, err = proxyconn.GetConnection(host, port)
+		if err != nil {
+			er <- err
+		}
+		client = ldap.NewConn(conn, false)
+		client.Start()
+		ch <- client
 	}()
 
 	var ret *ldap.Conn
 	select {
 	case ret = <-ch:
-	case <-time.After(time.Second):
-		ret = startConn(useSsl)
+	case err := <-er:
+		return nil, fmt.Errorf("%v", err)
+	case <-time.After(2 * time.Second):
+		return nil, fmt.Errorf("timeout reached when contacting LDAP server")
 	}
 	return ret, nil
 }

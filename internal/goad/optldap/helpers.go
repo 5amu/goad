@@ -1,14 +1,9 @@
 package optldap
 
 import (
-	"crypto/tls"
 	"fmt"
 	"strconv"
 	"strings"
-	"time"
-
-	"github.com/5amu/goad/pkg/proxyconn"
-	ldapfingerprint "github.com/praetorian-inc/fingerprintx/pkg/plugins/services/ldap"
 )
 
 /*
@@ -107,23 +102,6 @@ func NewFilter(attribute string, equalsTo string) string {
 
 func UACFilter(prop UserAccountControl) string {
 	return NewFilter(UAC, strconv.Itoa(int(prop)))
-}
-
-func IsLDAP(host string, port int, ssl bool) bool {
-	conn, err := proxyconn.GetConnection(host, port)
-	if err != nil {
-		return false
-	}
-	if ssl {
-		conn = tls.Client(conn, &tls.Config{
-			InsecureSkipVerify: true,
-		})
-	}
-	res, err := ldapfingerprint.DetectLDAP(conn, 2*time.Second)
-	if err != nil {
-		return false
-	}
-	return res
 }
 
 type UCD struct {

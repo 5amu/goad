@@ -21,11 +21,11 @@ require (
 require (
 	github.com/0xrawsec/golang-utils v1.3.1 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
-	github.com/docker/go-units v0.5.0 // indirect
+	github.com/google/uuid v1.3.1 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
+	github.com/kr/text v0.2.0 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
-	github.com/sirupsen/logrus v1.9.0 // indirect
 	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
@@ -38,7 +38,6 @@ require (
 	github.com/go-asn1-ber/asn1-ber v1.5.5 // indirect
 	github.com/go-logr/logr v1.3.0 // indirect
 	github.com/gofrs/uuid v4.4.0+incompatible // indirect
-	github.com/google/uuid v1.3.1 // indirect
 	github.com/hashicorp/go-cleanhttp v0.5.2
 	github.com/hashicorp/go-uuid v1.0.3 // indirect
 	github.com/jcmturner/aescts/v2 v2.0.0 // indirect
@@ -49,7 +48,6 @@ require (
 	github.com/masterzen/simplexml v0.0.0-20190410153822-31eea3082786 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
-	github.com/praetorian-inc/fingerprintx v1.1.13
 	github.com/tidwall/transform v0.0.0-20201103190739-32f242e2dbde
 	golang.org/x/crypto v0.21.0
 	golang.org/x/net v0.21.0
