@@ -5,7 +5,6 @@ go 1.21
 require (
 	github.com/0xrawsec/golang-etw v1.6.2
 	github.com/5amu/go-flags v0.0.0-20240129164246-3942f39c22b8
-	github.com/5amu/smb v0.0.0-20240308221359-bc8e97d8f5cc
 	github.com/fatih/color v1.16.0
 	github.com/geoffgarside/ber v1.1.0
 	github.com/ghostiam/binstruct v1.3.2
