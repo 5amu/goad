@@ -18,6 +18,11 @@ builds:
 
     flags:
       - -trimpath
+    
+    ldflags:
+      - -extldflags=-static
+      - -s 
+      - -w
 
 archives:
   - format: zip
