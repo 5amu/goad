@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/5amu/goad/pkg/encoder"
 	"github.com/5amu/goad/pkg/smb/internal/erref"
 	"github.com/5amu/goad/pkg/smb/internal/smb2"
 
@@ -84,6 +85,14 @@ func (c *Session) GetSessionID() []byte {
 	b := make([]byte, 8)
 	binary.LittleEndian.PutUint64(b, c.s.sessionId)
 	return b
+}
+
+func (c *Session) GetNtProofStr() []byte {
+	return c.s.nproofstr
+}
+
+func (c *Session) GetSessionKey() []byte {
+	return c.s.sessionk
 }
 
 func (c *Session) WithContext(ctx context.Context) *Session {
@@ -2173,14 +2182,7 @@ func (c *Session) GetNamedPipe(fname string) (*File, error) {
 	return f, nil
 }
 
-func (c *Session) OpenSCManager(np *File, callId *uint32) ([]byte, error) {
-	openSCManager := &msrpc.OpenSCManager{
-		CallId:     *callId,
-		ServerName: c.addr,
-	}
-	buf := make([]byte, openSCManager.Size())
-	openSCManager.Encode(buf)
-
+func (c *Session) sendRPC(np *File, payload []byte) ([]byte, error) {
 	writeReq := &smb2.WriteRequest{
 		FileId:           np.fd,
 		Flags:            0,
@@ -2188,7 +2190,7 @@ func (c *Session) OpenSCManager(np *File, callId *uint32) ([]byte, error) {
 		RemainingBytes:   0,
 		Offset:           0,
 		WriteChannelInfo: []smb2.Encoder{},
-		Data:             buf,
+		Data:             payload,
 	}
 
 	var err error
@@ -2208,27 +2210,15 @@ func (c *Session) OpenSCManager(np *File, callId *uint32) ([]byte, error) {
 		return nil, fmt.Errorf("invalid write response")
 	}
 
-	buf = make([]byte, 1048576)
+	buf := make([]byte, 1048576)
 	l, err := np.Read(buf)
 	if err != nil {
 		return nil, err
 	}
-
-	res, err := msrpc.ParseOpenSCManagerResponse(buf[:l])
-	if err != nil {
-		fmt.Println(err)
-		return nil, err
-	}
-	switch res.ReturnCode {
-	case 5:
-		return nil, fmt.Errorf("request OpenSCManager returned error code 5 (WERR_ACCESS_DENIED)")
-	case 0:
-		return res.ContextHandle, nil
-	}
-	return nil, fmt.Errorf("request OpenSCManager returned error code %d (?)", res.ReturnCode)
+	return buf[:l], nil
 }
 
-func (c *Session) CreateService() error {
+func (c *Session) CreateService(cmd string) error {
 	f, err := c.GetNamedPipe(msrpc.SVCCTL_DLL)
 	if err != nil {
 		return err
@@ -2239,11 +2229,69 @@ func (c *Session) CreateService() error {
 	}()
 
 	var callId = uint32(1)
-	blob, err := c.OpenSCManager(f, &callId)
+
+	// OpenSCManager
+	openSCMs := &msrpc.OpenSCManager{
+		CallId:     callId,
+		ServerName: c.addr,
+	}
+	openSCMb := make([]byte, openSCMs.Size())
+	openSCMs.Encode(openSCMb)
+
+	data, err := c.sendRPC(f, openSCMb)
 	if err != nil {
 		return err
 	}
-	fmt.Println(blob)
+
+	var openSCMr msrpc.OpenSCManagerResponse
+	if err := encoder.Unmarshal(data, &openSCMr); err != nil {
+		return err
+	}
+
+	switch openSCMr.ReturnCode {
+	case 0:
+	case 5:
+		return fmt.Errorf("request OpenSCManager returned error code 5 (WERR_ACCESS_DENIED)")
+	default:
+		return fmt.Errorf("request OpenSCManager returned error code %d", openSCMr.ReturnCode)
+	}
+
+	callId++
+	// OpenService
+	openSVCs := &msrpc.OpenService{
+		CallId:        callId,
+		ServiceName:   "goadtestasdf",
+		ContextHandle: openSCMr.ContextHandle,
+	}
+	openSVCb := make([]byte, openSVCs.Size())
+	openSVCs.Encode(openSVCb)
+
+	data, err = c.sendRPC(f, openSVCb)
+	if err != nil {
+		return err
+	}
+
+	var openSVCr msrpc.OpenServiceResponse
+	if err := encoder.Unmarshal(data, &openSVCr); err != nil {
+		return err
+	}
+
+	switch openSVCr.ReturnCode {
+	case 0:
+	case 5:
+		return fmt.Errorf("request OpenService returned error code 5 (WERR_ACCESS_DENIED)")
+	default:
+		return fmt.Errorf("request OpenService returned error code %d", openSVCr.ReturnCode)
+	}
+
+	// CreateService
+	callId++
+
+	// StartService
+	callId++
+
+	// CloseService
+	callId++
 
 	return nil
 }

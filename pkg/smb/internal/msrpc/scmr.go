@@ -1,7 +1,8 @@
 package msrpc
 
 import (
-	"github.com/5amu/goad/pkg/encoder"
+	"fmt"
+
 	"github.com/5amu/goad/pkg/smb/internal/utf16le"
 )
 
@@ -80,19 +81,7 @@ const (
 	SC_MANAGER_CONNECT        = 0x00000001
 )
 
-// lpMachineName: An SVCCTL_HANDLEW (section 2.2.3) data type that defines the
-// pointer to a null-terminated UNICODE string that specifies the server's
-// machine name.
-type MachineNameStruct struct {
-	ReferentId  uint32 `smb:"offset:MachineName"`
-	MaxCount    uint32
-	Offset      uint32
-	ActualCount uint32
-	MachineName []byte
-	Reserved    uint16
-}
-
-type SVCCTLHandleStruct struct {
+type SVCCTLHandle struct {
 	ReferentId  uint32 `smb:"offset:Data"`
 	MaxCount    uint32
 	Offset      uint32
@@ -101,14 +90,14 @@ type SVCCTLHandleStruct struct {
 }
 
 // https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-scmr/dc84adb3-d51d-48eb-820d-ba1c6ca5faf2
-type ROpenSCManagerRequest struct {
-	MachineName  SVCCTLHandleStruct
-	DatabaseName SVCCTLHandleStruct
+type OpenSCManagerRequest struct {
+	MachineName  SVCCTLHandle
+	DatabaseName SVCCTLHandle
 	Reserved     uint16
 	AccessMask   uint32
 }
 
-type ROpenSCManagerResponse struct {
+type OpenSCManagerResponse struct {
 	RpcHeaderStruct
 	AllocHint     uint32
 	ContextId     uint16
@@ -159,14 +148,14 @@ func (r *OpenSCManager) Encode(b []byte) {
 		},
 		ContextID: 0,
 		OpNum:     ROpenSCManagerW,
-		Payload: ROpenSCManagerRequest{
-			MachineName: SVCCTLHandleStruct{
+		Payload: OpenSCManagerRequest{
+			MachineName: SVCCTLHandle{
 				MaxCount:    uint32(srvcount),
 				Offset:      0,
 				ActualCount: uint32(srvcount),
 				Data:        srvname,
 			},
-			DatabaseName: SVCCTLHandleStruct{
+			DatabaseName: SVCCTLHandle{
 				MaxCount:    uint32(dbcount),
 				Offset:      0,
 				ActualCount: uint32(dbcount),
@@ -179,7 +168,68 @@ func (r *OpenSCManager) Encode(b []byte) {
 	copy(b, req.Bytes())
 }
 
-func ParseOpenSCManagerResponse(data []byte) (*ROpenSCManagerResponse, error) {
-	var res ROpenSCManagerResponse
-	return &res, encoder.Unmarshal(data, &res)
+type OpenServiceRequest struct {
+	ContextHandle []byte `smb:"fixed:20"`
+	ServiceName   SVCCTLHandle
+	AccessMask    uint32
+}
+
+type OpenServiceResponse struct {
+	RpcHeaderStruct
+	AllocHint     uint32
+	ContextId     uint16
+	CancelCount   uint8
+	Reserved      uint8
+	ContextHandle []byte `smb:"fixed:20"`
+	ReturnCode    uint32
+}
+
+type OpenService struct {
+	CallId        uint32
+	ServiceName   string
+	ContextHandle []byte `smb:"fixed:20"`
+}
+
+func (r *OpenService) Size() int {
+	off := utf16le.EncodedStringLen(r.ServiceName) + 2
+	off = roundup(off, 4)
+	off += 16 // Rpc base header
+	off += 2  // context ID
+	off += 2  // Opnum
+	off += 20 // Context Handle
+	off += 16 // SVC Handle size
+	off += 4  // accessmask
+	return off + 1
+}
+
+func (r *OpenService) Encode(b []byte) {
+	var srvname []byte = make([]byte, utf16le.EncodedStringLen(r.ServiceName))
+	utf16le.EncodeString(srvname, r.ServiceName)
+	srvname = append(srvname, []byte{0, 0}...)
+	var srvcount int = utf16le.EncodedStringLen(r.ServiceName)/2 + 1
+
+	req := RpcRequestStruct{
+		RpcHeaderStruct: RpcHeaderStruct{
+			RpcVersion:         RPC_VERSION,
+			RpcVersionMinor:    RPC_VERSION_MINOR,
+			PacketType:         RPC_TYPE_REQUEST,
+			PacketFlags:        RPC_PACKET_FLAG_FIRST | RPC_PACKET_FLAG_LAST,
+			DataRepresentation: []byte{0x10, 0, 0, 0},
+			AuthLength:         0,
+			CallId:             r.CallId,
+		},
+		ContextID: 0,
+		OpNum:     ROpenServiceW,
+		Payload: OpenServiceRequest{
+			ContextHandle: r.ContextHandle,
+			ServiceName: SVCCTLHandle{
+				MaxCount:    uint32(srvcount),
+				ActualCount: uint32(srvcount),
+				Data:        srvname,
+			},
+			AccessMask: SERVICE_ALL_ACCESS,
+		},
+	}
+	fmt.Println(req.Bytes(), r.Size())
+	copy(b, req.Bytes())
 }

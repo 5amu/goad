@@ -9,12 +9,14 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/sha512"
+	"encoding/binary"
 	"fmt"
 	"hash"
 
 	"github.com/5amu/goad/pkg/smb/internal/crypto/ccm"
 	"github.com/5amu/goad/pkg/smb/internal/crypto/cmac"
 	"github.com/5amu/goad/pkg/smb/internal/smb2"
+	spnegol "github.com/5amu/goad/pkg/smb/internal/spnego"
 
 	"github.com/5amu/goad/pkg/smb/internal/erref"
 )
@@ -114,6 +116,13 @@ func sessionSetup(conn *conn, i Initiator, ctx context.Context) (*session, error
 	req.SecurityBuffer = outputToken
 
 	req.CreditRequestResponse = 0
+
+	if t, e := spnegol.DecodeNegTokenResp(outputToken); e == nil {
+		off := 8 + 4 + 8 + 4
+		offset := binary.LittleEndian.Uint32(t.ResponseToken[off : off+4])
+		s.nproofstr = t.ResponseToken[offset : offset+16]
+		s.sessionk = t.ResponseToken[len(t.ResponseToken)-16 : len(t.ResponseToken)]
+	}
 
 	// We set session before sending packet just for setting hdr.SessionId.
 	// But, we should not permit access from receiver until the session information is completed.
@@ -264,7 +273,8 @@ type session struct {
 	encrypter cipher.AEAD
 	decrypter cipher.AEAD
 
-	// applicationKey []byte
+	nproofstr []byte
+	sessionk  []byte
 }
 
 func (s *session) logoff(ctx context.Context) error {

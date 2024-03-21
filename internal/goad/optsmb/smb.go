@@ -2,6 +2,7 @@ package optsmb
 
 import (
 	"context"
+	"encoding/hex"
 	"fmt"
 	"os"
 	"slices"
@@ -28,8 +29,8 @@ type Options struct {
 		Port     int    `long:"port" default:"445" description:"Provide SMB port"`
 	} `group:"Connection Options" description:"Connection Options"`
 
-	Shares  bool `long:"shares" description:"list open shares"`
-	Service bool `long:"service" description:"service test"`
+	Shares bool   `long:"shares" description:"list open shares"`
+	Exec   string `short:"x" long:"exec" description:"execute a command by creating a service via RPC"`
 
 	credentials    []utils.Credential
 	target2SMBInfo map[string]*smb.SMBFingerprint
@@ -41,8 +42,8 @@ func (o *Options) getFunction() func(string) {
 	if o.Shares {
 		return o.enumShares
 	}
-	if o.Service {
-		return o.service
+	if o.Exec != "" {
+		return o.exec
 	}
 	return func(s string) {
 		_, _, _ = o.authenticate(s, DefaultPort, false)
@@ -107,7 +108,19 @@ func (o *Options) authenticate(host string, port int, stopAtFirstMatch bool) (*s
 		if err == nil {
 			if stopAtFirstMatch {
 				if sid := s.GetSessionID(); sid != nil {
-					prt.StoreInfo("SMB2 Session ID: " + color.HiMagentaString("%x", sid))
+					prt.StoreInfo("SMB2 Session ID : " + color.HiMagentaString("%x", sid))
+				}
+				pstr := s.GetNtProofStr()
+				skey := s.GetSessionKey()
+				if len(pstr)+len(skey) > 16 {
+					hash := creds.Hash
+					if creds.Hash == "" {
+						hash = hex.EncodeToString(ntlmhash(creds.Password))
+					}
+					secretKey := CalculateSMB3EncryptionKey(creds.Username, domain, hash, skey, pstr)
+					if len(secretKey) != 0 {
+						prt.StoreInfo("SMB3 Session Key: " + color.HiMagentaString("%x", secretKey))
+					}
 				}
 				return s, creds, nil
 			}
@@ -182,7 +195,7 @@ func (o *Options) enumShares(target string) {
 	}
 }
 
-func (o *Options) service(target string) {
+func (o *Options) exec(target string) {
 	prt := printer.NewPrinter("SMB", target, o.target2SMBInfo[target].NetBIOSComputerName, 445)
 	defer prt.PrintStored(&o.printMutex)
 
@@ -192,7 +205,7 @@ func (o *Options) service(target string) {
 		return
 	}
 
-	if err = s.CreateService(); err != nil {
+	if err = s.CreateService(o.Exec); err != nil {
 		prt.StoreFailure(err.Error())
 		return
 	}
