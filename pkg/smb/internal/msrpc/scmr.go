@@ -409,3 +409,50 @@ func (r *StartService) Encode(b []byte) {
 	}
 	copy(b, req.Bytes())
 }
+
+type DeleteServiceRequest struct {
+	ContextHandle []byte `smb:"fixed:20"`
+}
+
+type DeleteServiceResponse struct {
+	RpcHeaderStruct
+	AllocHint   uint32
+	ContextId   uint16
+	CancelCount uint8
+	Reserved    uint8
+	ReturnCode  uint32
+}
+
+type DeleteService struct {
+	ContextHandle []byte
+	CallId        uint32
+}
+
+func (r *DeleteService) Size() int {
+	off := 16 // Rpc base header
+	off += 2  // context ID
+	off += 4  // Alloc Hint
+	off += 2  // Opnum
+	off += 20 // ContextHandle
+	return off
+}
+
+func (r *DeleteService) Encode(b []byte) {
+	req := RpcRequestStruct{
+		RpcHeaderStruct: RpcHeaderStruct{
+			RpcVersion:         RPC_VERSION,
+			RpcVersionMinor:    RPC_VERSION_MINOR,
+			PacketType:         RPC_TYPE_REQUEST,
+			PacketFlags:        RPC_PACKET_FLAG_FIRST | RPC_PACKET_FLAG_LAST,
+			DataRepresentation: []byte{0x10, 0, 0, 0},
+			AuthLength:         0,
+			CallId:             r.CallId,
+		},
+		ContextID: 0,
+		OpNum:     RDeleteService,
+		Payload: DeleteServiceRequest{
+			ContextHandle: r.ContextHandle,
+		},
+	}
+	copy(b, req.Bytes())
+}

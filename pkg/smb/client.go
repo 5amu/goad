@@ -2333,6 +2333,38 @@ func (c *Session) StartService(np *File, svcHandle []byte, callId uint32) (*msrp
 	return &startSVCr, nil
 }
 
+func (c *Session) DeleteService(np *File, svcHandle []byte, callId uint32) (*msrpc.DeleteServiceResponse, error) {
+	delSVCs := &msrpc.DeleteService{
+		CallId:        callId,
+		ContextHandle: svcHandle,
+	}
+	delSVCb := make([]byte, delSVCs.Size())
+	delSVCs.Encode(delSVCb)
+
+	data, err := c.sendRPC(np, delSVCb)
+	if err != nil {
+		return nil, err
+	}
+
+	var startSVCr msrpc.DeleteServiceResponse
+	if err := encoder.Unmarshal(data, &startSVCr); err != nil {
+		return nil, err
+	}
+
+	switch startSVCr.ReturnCode {
+	case 5:
+		return nil, fmt.Errorf("request DeleteService returned error code 5 (ERROR_ACCESS_DENIED)")
+	case 6:
+		return nil, fmt.Errorf("request DeleteService returned error code 6 (ERROR_INVALID_HANDLE)")
+	case 1072:
+		return nil, fmt.Errorf("request DeleteService returned error code 1072 (ERROR_SERVICE_MARKED_FOR_DELETE)")
+	case 1115:
+		return nil, fmt.Errorf("request DeleteService returned error code 1115 (ERROR_SHUTDOWN_IN_PROGRESS)")
+	case 0:
+	}
+	return &startSVCr, nil
+}
+
 func RandStringRunes(n int) string {
 	var letterRunes = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
 	b := make([]rune, n)
@@ -2347,9 +2379,16 @@ func (c *Session) SmbExec(cmd string, share string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+
+	sh, err := c.Mount(share)
+	if err != nil {
+		return "", err
+	}
+
 	defer func() {
 		_ = f.Close()
 		_ = f.fs.Umount()
+		_ = sh.Umount()
 	}()
 
 	var callId = uint32(1)
@@ -2384,7 +2423,8 @@ func (c *Session) SmbExec(cmd string, share string) (string, error) {
 		return "", err
 	}
 
-	sh, err := c.Mount(share)
+	callId++
+	_, err = c.DeleteService(f, svcHandle, callId)
 	if err != nil {
 		return "", err
 	}
@@ -2393,5 +2433,9 @@ func (c *Session) SmbExec(cmd string, share string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	defer func() {
+		_ = sh.Remove(tempRemotef)
+	}()
+
 	return strings.TrimSuffix(string(content), "\r\n"), nil
 }
