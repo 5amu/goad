@@ -1,8 +1,6 @@
 package msrpc
 
 import (
-	"fmt"
-
 	"github.com/5amu/goad/pkg/smb/internal/utf16le"
 )
 
@@ -81,6 +79,32 @@ const (
 	SC_MANAGER_CONNECT        = 0x00000001
 )
 
+// https://docs.microsoft.com/en-us/openspecs/windows_protocols/ms-scmr/6a8ca926-9477-4dd4-b766-692fab07227e
+const (
+	SERVICE_KERNEL_DRIVER       = 0x00000001
+	SERVICE_FILE_SYSTEM_DRIVER  = 0x00000002
+	SERVICE_WIN32_OWN_PROCESS   = 0x00000010
+	SERVICE_WIN32_SHARE_PROCESS = 0x00000020
+	SERVICE_INTERACTIVE_PROCESS = 0x00000100
+)
+
+// Service Start Type
+const (
+	SERVICE_BOOT_START   = 0x00000000
+	SERVICE_SYSTEM_START = 0x00000001
+	SERVICE_AUTO_START   = 0x00000002
+	SERVICE_DEMAND_START = 0x00000003
+	SERVICE_DISABLED     = 0x00000004
+)
+
+// Service Error Control
+const (
+	SERVICE_ERROR_IGNORE   = 0x00000000
+	SERVICE_ERROR_NORMAL   = 0x00000001
+	SERVICE_ERROR_SEVERE   = 0x00000002
+	SERVICE_ERROR_CRITICAL = 0x00000003
+)
+
 type SVCCTLHandle struct {
 	ReferentId  uint32 `smb:"offset:Data"`
 	MaxCount    uint32
@@ -113,8 +137,8 @@ type OpenSCManager struct {
 }
 
 func (r *OpenSCManager) Size() int {
-	off := utf16le.EncodedStringLen(r.ServerName) + 2
-	off += utf16le.EncodedStringLen("ServicesActive") + 2
+	off := utf16le.EncodedStringLen(r.ServerName + "\x00")
+	off += utf16le.EncodedStringLen("ServicesActive\x00")
 
 	off += 16      // Rpc base header
 	off += 2       // context ID
@@ -126,15 +150,8 @@ func (r *OpenSCManager) Size() int {
 }
 
 func (r *OpenSCManager) Encode(b []byte) {
-	var srvname []byte = make([]byte, utf16le.EncodedStringLen(r.ServerName))
-	utf16le.EncodeString(srvname, r.ServerName)
-	srvname = append(srvname, []byte{0, 0}...)
-	var srvcount int = utf16le.EncodedStringLen(r.ServerName)/2 + 1
-
-	var dbname []byte = make([]byte, utf16le.EncodedStringLen("ServicesActive"))
-	utf16le.EncodeString(dbname, "ServicesActive")
-	dbname = append(dbname, []byte{0, 0}...)
-	var dbcount int = utf16le.EncodedStringLen("ServicesActive")/2 + 1
+	srvname, srvcount := utf16lePlusCount(r.ServerName)
+	dbname, dbcount := utf16lePlusCount("ServicesActive")
 
 	req := RpcRequestStruct{
 		RpcHeaderStruct: RpcHeaderStruct{
@@ -168,9 +185,17 @@ func (r *OpenSCManager) Encode(b []byte) {
 	copy(b, req.Bytes())
 }
 
+type SCRpcHandle struct {
+	MaxCount    uint32
+	Offset      uint32
+	ActualCount uint32
+	Data        []byte
+}
+
 type OpenServiceRequest struct {
 	ContextHandle []byte `smb:"fixed:20"`
-	ServiceName   SVCCTLHandle
+	ServiceName   SCRpcHandle
+	Reserved      uint16
 	AccessMask    uint32
 }
 
@@ -199,14 +224,11 @@ func (r *OpenService) Size() int {
 	off += 20 // Context Handle
 	off += 16 // SVC Handle size
 	off += 4  // accessmask
-	return off + 1
+	return off
 }
 
 func (r *OpenService) Encode(b []byte) {
-	var srvname []byte = make([]byte, utf16le.EncodedStringLen(r.ServiceName))
-	utf16le.EncodeString(srvname, r.ServiceName)
-	srvname = append(srvname, []byte{0, 0}...)
-	var srvcount int = utf16le.EncodedStringLen(r.ServiceName)/2 + 1
+	srvname, srvcount := utf16lePlusCount(r.ServiceName)
 
 	req := RpcRequestStruct{
 		RpcHeaderStruct: RpcHeaderStruct{
@@ -222,14 +244,168 @@ func (r *OpenService) Encode(b []byte) {
 		OpNum:     ROpenServiceW,
 		Payload: OpenServiceRequest{
 			ContextHandle: r.ContextHandle,
-			ServiceName: SVCCTLHandle{
+			ServiceName: SCRpcHandle{
 				MaxCount:    uint32(srvcount),
+				Offset:      0,
 				ActualCount: uint32(srvcount),
 				Data:        srvname,
 			},
 			AccessMask: SERVICE_ALL_ACCESS,
 		},
 	}
-	fmt.Println(req.Bytes(), r.Size())
+	copy(b, req.Bytes())
+}
+
+type CreateServiceRequest struct {
+	ContextHandle       []byte `smb:"fixed:20"`
+	ServiceName         SCRpcHandle
+	Reserved1           uint16
+	DisplayName         SVCCTLHandle
+	Reserved2           uint16
+	AccessMask          uint32
+	ServiceType         uint32
+	ServiceStartType    uint32
+	ServiceErrorControl uint32
+	BinaryPathName      SCRpcHandle
+	NULLPointer         uint32
+	TagId               uint32
+	NULLPointer2        uint32
+	DependSize          uint32
+	NULLPointer3        uint32
+	NULLPointer4        uint32
+	PasswordSize        uint32
+}
+
+type CreateServiceResponse struct {
+	RpcHeaderStruct
+	AllocHint     uint32
+	ContextId     uint16
+	CancelCount   uint8
+	Reserved      uint8
+	TagId         uint32
+	ContextHandle []byte `smb:"fixed:20"`
+	ReturnCode    uint32
+}
+
+type CreateService struct {
+	CallId         uint32
+	ServiceName    string
+	DisplayName    string
+	BinaryPathName string
+	ContextHandle  []byte `smb:"fixed:20"`
+}
+
+func (r *CreateService) Size() int {
+	off := utf16le.EncodedStringLen(r.ServiceName) + 2
+	off += utf16le.EncodedStringLen(r.DisplayName) + 2
+	off += utf16le.EncodedStringLen(r.BinaryPathName) + 2
+	off = roundup(off, 4)
+	off += 16           // Rpc base header
+	off += 2            // context ID
+	off += 2            // Opnum
+	off += 20           // Context Handle
+	off += 16 + 16 + 20 // SVC Handle size
+	off += 4            // accessmask
+	off += 4            // ServiceType
+	off += 4            // ServiceStartType
+	off += 4            // ServiceErrorControl
+	return off + 24     // following data
+}
+
+func (r *CreateService) Encode(b []byte) {
+	sname, scount := utf16lePlusCount(r.ServiceName)
+	dname, dcount := utf16lePlusCount(r.DisplayName)
+	bname, bcount := utf16lePlusCount(r.BinaryPathName)
+
+	req := RpcRequestStruct{
+		RpcHeaderStruct: RpcHeaderStruct{
+			RpcVersion:         RPC_VERSION,
+			RpcVersionMinor:    RPC_VERSION_MINOR,
+			PacketType:         RPC_TYPE_REQUEST,
+			PacketFlags:        RPC_PACKET_FLAG_FIRST | RPC_PACKET_FLAG_LAST,
+			DataRepresentation: []byte{0x10, 0, 0, 0},
+			AuthLength:         0,
+			CallId:             r.CallId,
+		},
+		ContextID: 0,
+		OpNum:     RCreateServiceW,
+		Payload: CreateServiceRequest{
+			ContextHandle: r.ContextHandle,
+			ServiceName: SCRpcHandle{
+				MaxCount:    uint32(scount),
+				Offset:      0,
+				ActualCount: uint32(scount),
+				Data:        sname,
+			},
+			DisplayName: SVCCTLHandle{
+				MaxCount:    uint32(dcount),
+				Offset:      0,
+				ActualCount: uint32(dcount),
+				Data:        dname,
+			},
+			AccessMask:          SERVICE_ALL_ACCESS,
+			ServiceType:         SERVICE_WIN32_OWN_PROCESS,
+			ServiceStartType:    SERVICE_DEMAND_START,
+			ServiceErrorControl: SERVICE_ERROR_IGNORE,
+			BinaryPathName: SCRpcHandle{
+				MaxCount:    uint32(bcount),
+				Offset:      0,
+				ActualCount: uint32(bcount),
+				Data:        bname,
+			},
+		},
+	}
+	copy(b, req.Bytes())
+}
+
+type StartServiceRequest struct {
+	ContextHandle []byte `smb:"fixed:20"`
+	Argc          uint32
+	Argv          []byte `smb:"fixed:4"`
+}
+
+type StartServiceResponse struct {
+	RpcHeaderStruct
+	AllocHint   uint32
+	ContextId   uint16
+	CancelCount uint8
+	Reserved    uint8
+	StubData    uint32
+}
+
+type StartService struct {
+	ContextHandle []byte `smb:"fixed:20"`
+	CallId        uint32
+}
+
+func (r *StartService) Size() int {
+	off := 16 // Rpc base header
+	off += 2  // context ID
+	off += 2  // Opnum
+	off += 20 // Service Handle
+	off += 4  // Argc
+	off += 4  // Argv
+	return off + 4
+}
+
+func (r *StartService) Encode(b []byte) {
+	req := RpcRequestStruct{
+		RpcHeaderStruct: RpcHeaderStruct{
+			RpcVersion:         RPC_VERSION,
+			RpcVersionMinor:    RPC_VERSION_MINOR,
+			PacketType:         RPC_TYPE_REQUEST,
+			PacketFlags:        RPC_PACKET_FLAG_FIRST | RPC_PACKET_FLAG_LAST,
+			DataRepresentation: []byte{0x10, 0, 0, 0},
+			AuthLength:         0,
+			CallId:             r.CallId,
+		},
+		ContextID: 0,
+		OpNum:     RStartServiceW,
+		Payload: StartServiceRequest{
+			ContextHandle: r.ContextHandle,
+			Argc:          0,
+			Argv:          []byte{0, 0, 0, 0},
+		},
+	}
 	copy(b, req.Bytes())
 }

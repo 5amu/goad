@@ -23,7 +23,7 @@ func hmacmd5(k []byte, data []byte) []byte {
 func ntlmhash(pass string) []byte {
 	uints := utf16.Encode([]rune(pass))
 	b := bytes.Buffer{}
-	binary.Write(&b, binary.LittleEndian, &uints)
+	_ = binary.Write(&b, binary.LittleEndian, &uints)
 	mdfour := md4.New()
 	_, _ = mdfour.Write(b.Bytes())
 	return mdfour.Sum(nil)

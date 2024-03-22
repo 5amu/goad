@@ -17,6 +17,7 @@ import (
 	"github.com/5amu/goad/pkg/encoder"
 	"github.com/5amu/goad/pkg/smb/internal/erref"
 	"github.com/5amu/goad/pkg/smb/internal/smb2"
+	"github.com/5amu/goad/pkg/smb/internal/utf16le"
 
 	"github.com/5amu/goad/pkg/smb/internal/msrpc"
 )
@@ -2218,18 +2219,7 @@ func (c *Session) sendRPC(np *File, payload []byte) ([]byte, error) {
 	return buf[:l], nil
 }
 
-func (c *Session) CreateService(cmd string) error {
-	f, err := c.GetNamedPipe(msrpc.SVCCTL_DLL)
-	if err != nil {
-		return err
-	}
-	defer func() {
-		_ = f.Close()
-		_ = f.fs.Umount()
-	}()
-
-	var callId = uint32(1)
-
+func (c *Session) OpenSCManager(np *File, callId uint32) (*msrpc.OpenSCManagerResponse, error) {
 	// OpenSCManager
 	openSCMs := &msrpc.OpenSCManager{
 		CallId:     callId,
@@ -2238,60 +2228,170 @@ func (c *Session) CreateService(cmd string) error {
 	openSCMb := make([]byte, openSCMs.Size())
 	openSCMs.Encode(openSCMb)
 
-	data, err := c.sendRPC(f, openSCMb)
+	data, err := c.sendRPC(np, openSCMb)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	var openSCMr msrpc.OpenSCManagerResponse
 	if err := encoder.Unmarshal(data, &openSCMr); err != nil {
-		return err
+		return nil, err
 	}
 
 	switch openSCMr.ReturnCode {
 	case 0:
 	case 5:
-		return fmt.Errorf("request OpenSCManager returned error code 5 (WERR_ACCESS_DENIED)")
+		return nil, fmt.Errorf("request OpenSCManager returned error code 5 (WERR_ACCESS_DENIED)")
 	default:
-		return fmt.Errorf("request OpenSCManager returned error code %d", openSCMr.ReturnCode)
+		return nil, fmt.Errorf("request OpenSCManager returned error code %d", openSCMr.ReturnCode)
 	}
+	return &openSCMr, nil
+}
 
-	callId++
-	// OpenService
+func (c *Session) OpenService(np *File, svcName string, chandle []byte, callId uint32) (*msrpc.OpenServiceResponse, error) {
 	openSVCs := &msrpc.OpenService{
 		CallId:        callId,
-		ServiceName:   "goadtestasdf",
-		ContextHandle: openSCMr.ContextHandle,
+		ServiceName:   svcName,
+		ContextHandle: chandle,
 	}
 	openSVCb := make([]byte, openSVCs.Size())
 	openSVCs.Encode(openSVCb)
 
-	data, err = c.sendRPC(f, openSVCb)
+	data, err := c.sendRPC(np, openSVCb)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	var openSVCr msrpc.OpenServiceResponse
 	if err := encoder.Unmarshal(data, &openSVCr); err != nil {
-		return err
+		return nil, err
 	}
 
 	switch openSVCr.ReturnCode {
 	case 0:
 	case 5:
-		return fmt.Errorf("request OpenService returned error code 5 (WERR_ACCESS_DENIED)")
+		return nil, fmt.Errorf("request OpenService returned error code 5 (WERR_ACCESS_DENIED)")
+	case 0x00000424:
+		return nil, fmt.Errorf("request OpenService returned error code 0x00000424 (WERR_SERVICE_DOES_NOT_EXIST)")
 	default:
-		return fmt.Errorf("request OpenService returned error code %d", openSVCr.ReturnCode)
+		return nil, fmt.Errorf("request OpenService returned error code %d", openSVCr.ReturnCode)
+	}
+	return &openSVCr, nil
+}
+
+func (c *Session) CreateService(np *File, svcName string, chandle []byte, binpath string, callId uint32) (*msrpc.CreateServiceResponse, error) {
+	createSVCs := &msrpc.CreateService{
+		CallId:         callId,
+		ServiceName:    svcName,
+		DisplayName:    svcName,
+		BinaryPathName: binpath,
+		ContextHandle:  chandle,
+	}
+	createSVCb := make([]byte, createSVCs.Size())
+	createSVCs.Encode(createSVCb)
+
+	data, err := c.sendRPC(np, createSVCb)
+	if err != nil {
+		return nil, err
 	}
 
-	// CreateService
-	callId++
+	var createSVCr msrpc.CreateServiceResponse
+	if err := encoder.Unmarshal(data, &createSVCr); err != nil {
+		return nil, err
+	}
 
-	// StartService
-	callId++
+	switch createSVCr.ReturnCode {
+	case 0:
+	case 5:
+		return nil, fmt.Errorf("request OpenService returned error code 5 (WERR_ACCESS_DENIED)")
+	case 0x00000424:
+		return nil, fmt.Errorf("request OpenService returned error code 0x00000424 (WERR_SERVICE_DOES_NOT_EXIST)")
+	default:
+		return nil, fmt.Errorf("request OpenService returned error code %d", createSVCr.ReturnCode)
+	}
+	return &createSVCr, nil
+}
 
-	// CloseService
-	callId++
+func (c *Session) StartService(np *File, svcHandle []byte, callId uint32) (*msrpc.StartServiceResponse, error) {
+	startSVCs := &msrpc.StartService{
+		CallId:        callId,
+		ContextHandle: svcHandle,
+	}
+	startSVCb := make([]byte, startSVCs.Size())
+	startSVCs.Encode(startSVCb)
 
-	return nil
+	data, err := c.sendRPC(np, startSVCb)
+	if err != nil {
+		return nil, err
+	}
+
+	var startSVCr msrpc.StartServiceResponse
+	if err := encoder.Unmarshal(data, &startSVCr); err != nil {
+		return nil, err
+	}
+
+	return &startSVCr, nil
+}
+
+func RandStringRunes(n int) string {
+	var letterRunes = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
+	b := make([]rune, n)
+	for i := range b {
+		b[i] = letterRunes[rand.Intn(len(letterRunes))]
+	}
+	return string(b)
+}
+
+func (c *Session) SmbExec(cmd string, share string) (string, error) {
+	f, err := c.GetNamedPipe(msrpc.SVCCTL_DLL)
+	if err != nil {
+		return "", err
+	}
+	defer func() {
+		_ = f.Close()
+		_ = f.fs.Umount()
+	}()
+
+	var callId = uint32(1)
+	openSCMr, err := c.OpenSCManager(f, callId)
+	if err != nil {
+		return "", err
+	}
+
+	tempRemotef := RandStringRunes(3) + ".txt"
+	tempRemoteb := RandStringRunes(3) + ".bat"
+	svcname := "goad" + RandStringRunes(4)
+
+	command := fmt.Sprintf(
+		"%%COMSPEC%% /Q /c echo %s ^> \\\\127.0.0.1\\%s\\%s 2^>^&1 > %%TEMP%%\\%s & %%COMSPEC%% /Q /c %%TEMP%%\\%s & %%COMSPEC%% /Q /c del %%TEMP%%\\%s",
+		cmd, share, tempRemotef, tempRemoteb, tempRemoteb, tempRemoteb,
+	)
+
+	for utf16le.EncodedStringLen(command+"\x00")%4 != 0 {
+		command += "\x00"
+	}
+
+	callId++
+	createSVCr, err := c.CreateService(f, svcname, openSCMr.ContextHandle, command, callId)
+	if err != nil {
+		return "", err
+	}
+
+	callId++
+	svcHandle := createSVCr.ContextHandle
+	_, err = c.StartService(f, svcHandle, callId)
+	if err != nil {
+		return "", err
+	}
+
+	sh, err := c.Mount(share)
+	if err != nil {
+		return "", err
+	}
+
+	content, err := sh.ReadFile(tempRemotef)
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSuffix(string(content), "\r\n"), nil
 }

@@ -205,8 +205,10 @@ func (o *Options) exec(target string) {
 		return
 	}
 
-	if err = s.CreateService(o.Exec); err != nil {
+	if out, err := s.SmbExec(o.Exec, "C$"); err != nil {
 		prt.StoreFailure(err.Error())
 		return
+	} else {
+		prt.StoreWithoutStripping(out)
 	}
 }

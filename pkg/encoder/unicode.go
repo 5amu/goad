@@ -10,12 +10,12 @@ func ToUnicode(s string) []byte {
 	// https://github.com/Azure/go-ntlmssp/blob/master/unicode.go
 	uints := utf16.Encode([]rune(s))
 	b := bytes.Buffer{}
-	binary.Write(&b, binary.LittleEndian, &uints)
+	_ = binary.Write(&b, binary.LittleEndian, &uints)
 	return b.Bytes()
 }
 
 func BytesToUnicode(b []byte) string {
 	buf := bytes.Buffer{}
-	binary.Write(&buf, binary.LittleEndian, &b)
+	_ = binary.Write(&buf, binary.LittleEndian, &b)
 	return buf.String()
 }
