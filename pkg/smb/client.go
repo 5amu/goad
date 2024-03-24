@@ -18,6 +18,7 @@ import (
 	"github.com/5amu/goad/pkg/smb/internal/erref"
 	"github.com/5amu/goad/pkg/smb/internal/smb2"
 	"github.com/5amu/goad/pkg/smb/internal/utf16le"
+	"github.com/5amu/goad/pkg/utils"
 
 	"github.com/5amu/goad/pkg/smb/internal/msrpc"
 )
@@ -2365,15 +2366,6 @@ func (c *Session) DeleteService(np *File, svcHandle []byte, callId uint32) (*msr
 	return &startSVCr, nil
 }
 
-func RandStringRunes(n int) string {
-	var letterRunes = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
-	b := make([]rune, n)
-	for i := range b {
-		b[i] = letterRunes[rand.Intn(len(letterRunes))]
-	}
-	return string(b)
-}
-
 func (c *Session) SmbExec(cmd string, share string) (string, error) {
 	f, err := c.GetNamedPipe(msrpc.SVCCTL_DLL)
 	if err != nil {
@@ -2397,9 +2389,9 @@ func (c *Session) SmbExec(cmd string, share string) (string, error) {
 		return "", err
 	}
 
-	tempRemotef := RandStringRunes(3) + ".txt"
-	tempRemoteb := RandStringRunes(3) + ".bat"
-	svcname := "goad" + RandStringRunes(4)
+	tempRemotef := utils.RandStringRunes(3) + ".txt"
+	tempRemoteb := utils.RandStringRunes(3) + ".bat"
+	svcname := "goad" + utils.RandStringRunes(4)
 
 	command := fmt.Sprintf(
 		"%%COMSPEC%% /Q /c echo %s ^> \\\\127.0.0.1\\%s\\%s 2^>^&1 > %%TEMP%%\\%s & %%COMSPEC%% /Q /c %%TEMP%%\\%s & %%COMSPEC%% /Q /c del %%TEMP%%\\%s",

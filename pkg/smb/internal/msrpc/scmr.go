@@ -138,7 +138,9 @@ type OpenSCManager struct {
 
 func (r *OpenSCManager) Size() int {
 	off := utf16le.EncodedStringLen(r.ServerName + "\x00")
+	off += off % 4
 	off += utf16le.EncodedStringLen("ServicesActive\x00")
+	off += off % 4
 
 	off += 16      // Rpc base header
 	off += 2       // context ID
@@ -146,7 +148,7 @@ func (r *OpenSCManager) Size() int {
 	off += 16 + 16 // fixed bytes of the 2 handles
 	off += 4       // access mask
 	off += 4
-	return roundup(off, 4)
+	return off
 }
 
 func (r *OpenSCManager) Encode(b []byte) {
