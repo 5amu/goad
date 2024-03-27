@@ -31,7 +31,7 @@ func ntlmhash(pass string) []byte {
 
 func CalculateSMB3EncryptionKey(user, domain, hash string, sessionKey, ntProofStr []byte) []byte {
 
-	usrdom := encoder.ToUnicode(strings.ToUpper(user) + strings.ToUpper(domain))
+	usrdom := encoder.StringToUnicode(strings.ToUpper(user) + strings.ToUpper(domain))
 	ntlmhs, _ := hex.DecodeString(hash)
 
 	// ResponseNTKey
