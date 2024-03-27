@@ -31,6 +31,7 @@ type Options struct {
 
 	Shares bool   `long:"shares" description:"list open shares"`
 	Exec   string `short:"x" long:"exec" description:"execute a command by creating a service via RPC"`
+	Client bool   `long:"client" description:"Open a client to the remote machine"`
 
 	credentials    []utils.Credential
 	target2SMBInfo map[string]*smb.SMBFingerprint
@@ -44,6 +45,9 @@ func (o *Options) getFunction() func(string) {
 	}
 	if o.Exec != "" {
 		return o.exec
+	}
+	if o.Client {
+		return o.smbclient
 	}
 	return func(s string) {
 		_, _, _ = o.authenticate(s, DefaultPort, false)
