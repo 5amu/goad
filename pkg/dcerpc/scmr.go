@@ -1,7 +1,7 @@
-package msrpc
+package dcerpc
 
 // https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-scmr/e7a38186-cde2-40ad-90c7-650822bd6333
-var MSRPC_SCMR MSRPCUUID = MSRPCUUID{
+var MSRPC_SCMR MsrpcUUID = MsrpcUUID{
 	UUID:         "367abb81-9844-35f1-ad32-98f038001003",
 	Version:      2,
 	VersionMinor: 0,
@@ -56,7 +56,7 @@ const (
 	SERVICE_DISABLED     = 0x00000004
 )
 
-//  Error Control
+// Error Control
 const (
 	SERVICE_ERROR_IGNORE   = 0x00000000
 	SERVICE_ERROR_NORMAL   = 0x00000001
@@ -204,39 +204,6 @@ const (
 	SERVICE_TRIGGER_DATA_TYPE_STRING = 0x00000002
 )
 
-// ============================================================================
-// BEGIN: Data Types
-// ============================================================================
-
-// https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-dtyp/7d4dac05-9cef-4563-a058-f108abecce1d
-type SecurityDescriptorStruct struct {
-	Revision    uint8
-	Sbz1        uint8
-	Control     uint16
-	OffsetOwner uint32 `smb:"offset:OwnserSid"`
-	OffsetGroup uint32 `smb:"offset:GroupSid"`
-	OffsetSacl  uint32 `smb:"offset:Sacl"`
-	OffsetDacl  uint32 `smb:"offset:Dacl"`
-	OwnerSid    []byte
-	GroupSid    []byte
-	Sacl        []byte
-	Dacl        []byte
-}
-
-type ServiceStatusStruct struct {
-	ServiceType             uint32
-	CurrentState            uint32
-	ControlsAccepted        uint32
-	Win32ExitCode           uint32
-	ServiceSpecificExitCode uint32
-	CheckPoint              uint32
-	WaitHint                uint32
-}
-
-// ============================================================================
-// END: Data Types
-// ============================================================================
-
 // opnum
 // https://docs.microsoft.com/en-us/openspecs/windows_protocols/ms-scmr/0d7a7011-9f41-470d-ad52-8535b47ac282
 const (
@@ -323,13 +290,66 @@ const (
 	ERROR_SHUTDOWN_IN_PROGRESS      = 1115
 )
 
+// ============================================================================
+// BEGIN: Data Types
+// ============================================================================
+
+type ScRpcHandle struct {
+	Handle []byte `smb:"fixed:20"`
+}
+type LpScRpcHandle ScRpcHandle
+
+// https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-dtyp/7d4dac05-9cef-4563-a058-f108abecce1d
+type SecurityDescriptor struct {
+	Revision    uint8
+	Sbz1        uint8
+	Control     uint16
+	OffsetOwner uint32 `smb:"offset:OwnserSid"`
+	OffsetGroup uint32 `smb:"offset:GroupSid"`
+	OffsetSacl  uint32 `smb:"offset:Sacl"`
+	OffsetDacl  uint32 `smb:"offset:Dacl"`
+	OwnerSid    []byte
+	GroupSid    []byte
+	Sacl        []byte
+	Dacl        []byte
+}
+type LpSecurityDescriptor struct {
+	PointerHeader
+	SecurityDescriptor
+}
+
+type ServiceStatus struct {
+	ServiceType             uint32
+	CurrentState            uint32
+	ControlsAccepted        uint32
+	Win32ExitCode           uint32
+	ServiceSpecificExitCode uint32
+	CheckPoint              uint32
+	WaitHint                uint32
+}
+
+type LpServiceStatus struct {
+	PointerHeader
+	ServiceStatus
+}
+
+type SvcCtlHandleW WcharTPtr
+
+// ============================================================================
+// END: Data Types
+// ============================================================================
+
 // Opnum 0
 //
 //	[in, out] LPSC_RPC_HANDLE hSCObject
 //
 // https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-scmr/a2a4e174-09fb-4e55-bad3-f77c4b13245c
-type RCloseServiceHandleStruct struct {
-	HSCObject []byte `smb:"fixed:20"`
+type RCloseServiceHandleRequest struct {
+	HSCObject ScRpcHandle
+}
+
+type RCloseServiceHandleResponse struct {
+	HSCObject ScRpcHandle
 }
 
 // Opnum 1
@@ -339,9 +359,13 @@ type RCloseServiceHandleStruct struct {
 //	[out] LPSERVICE_STATUS lpServiceStatus
 //
 // https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-scmr/e1c478be-117f-4512-9b67-17c20a48af97
-type RControlServiceStruct struct {
-	HSCObject []byte `smb:"fixed:20"`
+type RControlServiceRequest struct {
+	HSCObject ScRpcHandle
 	DWControl uint32
+}
+
+type RControlServiceResponse struct {
+	Status LpServiceStatus
 }
 
 // Opnum 2
@@ -350,7 +374,7 @@ type RControlServiceStruct struct {
 //
 // https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-scmr/6744cdb8-f162-4be0-bb31-98996b6495be
 type RDeleteServiceStruct struct {
-	HSCObject []byte `smb:"fixed:20"`
+	HSCObject ScRpcHandle
 }
 
 // Opnum 3
@@ -360,7 +384,7 @@ type RDeleteServiceStruct struct {
 //
 // https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-scmr/ff71f732-e91d-4189-8fb9-a410674c63ad
 type RLockServiceDatabaseStruct struct {
-	HSCManager []byte `smb:"fixed:20"`
+	HSCManager ScRpcHandle
 }
 
 // Opnum 4
@@ -373,11 +397,10 @@ type RLockServiceDatabaseStruct struct {
 //
 // https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-scmr/7f339950-ce73-4782-9e10-4e1c5924594e
 type RQueryServiceObjectSecurityStruct struct {
-	HService              []byte `smb:"fixed:20"`
+	HService              ScRpcHandle
 	DWSecurityInformation uint32
-	LPSecurityDescriptor  SecurityDescriptorStruct
+	LPSecurityDescriptor  LpSecurityDescriptor
 	CBBufSize             uint32
-	PCBBytesNeeded        PTR
 }
 
 // Opnum 5
@@ -389,9 +412,9 @@ type RQueryServiceObjectSecurityStruct struct {
 //
 // https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-scmr/ea93548f-3917-4626-bef7-2f3f8fa39299
 type RSetServiceObjectSecurityStruct struct {
-	HService              []byte `smb:"fixed:20"`
+	HService              ScRpcHandle
 	DWSecurityInformation uint32
-	LPSecurityDescriptor  PTR
+	LPSecurityDescriptor  LpSecurityDescriptor
 	CBBufSize             uint32
 }
 
@@ -402,7 +425,7 @@ type RSetServiceObjectSecurityStruct struct {
 //
 // https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-scmr/cf94d915-b4e1-40e5-872b-a9cb3ad09b46
 type RQueryServiceStatusStruct struct {
-	HService []byte `smb:"fixed:20"`
+	HService ScRpcHandle
 }
 
 // Opnum 7
@@ -412,8 +435,8 @@ type RQueryServiceStatusStruct struct {
 //
 // https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-scmr/df67cf3b-1bae-4359-b684-1b481d27a30c
 type RSetServiceStatusStruct struct {
-	HServiceStatus  []byte `smb:"fixed:20"`
-	LPServiceStatus PTR
+	HServiceStatus  ScRpcHandle
+	LPServiceStatus LpServiceStatus
 }
 
 // Opnum 8
@@ -422,7 +445,7 @@ type RSetServiceStatusStruct struct {
 //
 // https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-scmr/3456de79-5250-4982-8a30-debd2ea0df92
 type RUnlockServiceDatabaseStruct struct {
-	Lock []byte `smb:"fixed:20"`
+	Lock LpScRpcHandle
 }
 
 // Opnum 9
@@ -432,7 +455,7 @@ type RUnlockServiceDatabaseStruct struct {
 //
 // https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-scmr/624e57ef-772d-45d2-ab99-03455879a424
 type RNotifyBootConfigStatusStruct struct {
-	LPMachineName  PTR
+	LPMachineName  SvcCtlHandleW
 	BootAcceptable uint32
 }
 
@@ -454,19 +477,19 @@ type RNotifyBootConfigStatusStruct struct {
 //
 // https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-scmr/61ea7ed0-c49d-4152-a164-b4830f16c8a4
 type RChangeServiceConfigWStruct struct {
-	HService           []byte `smb:"fixed:20"`
+	HService           ScRpcHandle
 	DWServiceType      uint32
 	DWStartType        uint32
 	DWErrorControl     uint32
-	LPBinaryPathName   PTR
-	LPLoadOrderGroup   PTR
-	LPDWTagId          PTR
-	LPDependencies     PTR
+	LPBinaryPathName   WcharTPtr
+	LPLoadOrderGroup   WcharTPtr
+	LPDWTagId          WcharTPtr
+	LPDependencies     WcharTPtr
 	DWDependSize       uint32
-	LPServiceStartName PTR
-	LPPassword         PTR
+	LPServiceStartName WcharTPtr
+	LPPassword         WcharTPtr
 	DWPWSize           uint32
-	LPDisplayName      PTR
+	LPDisplayName      WcharTPtr
 }
 
 // Opnum 12
@@ -490,20 +513,20 @@ type RChangeServiceConfigWStruct struct {
 //
 // https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-scmr/6a8ca926-9477-4dd4-b766-692fab07227e
 type RCreateServiceWStruct struct {
-	HSCManager         []byte `smb:"fixed:20"`
-	LPServiceName      PTR
-	LPDisplayName      PTR
+	HSCManager         ScRpcHandle
+	LPServiceName      WcharTPtr
+	LPDisplayName      WcharTPtr
 	DWDesiredAccess    uint32
 	DWServiceType      uint32
 	DWStartType        uint32
 	DWErrorControl     uint32
-	LPBinaryPathName   PTR
-	LPLoadOrderGroup   PTR
-	LPDWTagId          PTR
-	LPDependencies     PTR
+	LPBinaryPathName   WcharTPtr
+	LPLoadOrderGroup   WcharTPtr
+	LPDWTagId          WcharTPtr
+	LPDependencies     WcharTPtr
 	DWDependSize       uint32
-	LPServiceStartName PTR
-	LPPassword         PTR
+	LPServiceStartName WcharTPtr
+	LPPassword         WcharTPtr
 	DWPWSize           uint32
 }
 
@@ -518,7 +541,7 @@ type RCreateServiceWStruct struct {
 //
 // https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-scmr/6269bea8-9dd3-4092-bd33-67cec685d38e
 type REnumDependentServicesWStruct struct {
-	HService       []byte `smb:"fixed:20"`
+	HService       ScRpcHandle
 	DWServiceState uint32
 }
 
@@ -526,7 +549,23 @@ type REnumDependentServicesWStruct struct {
 type REnumServicesStatusWStruct struct{}
 
 // Opnum 15
-type ROpenSCManagerWStruct struct{}
+//
+//	[in, string, unique, range(0, SC_MAX_COMPUTER_NAME_LENGTH)]
+//	SVCCTL_HANDLEW lpMachineName,
+//	[in, string, unique, range(0, SC_MAX_NAME_LENGTH)]
+//	wchar_t* lpDatabaseName,
+//	[in] DWORD dwDesiredAccess,
+//	[out] LPSC_RPC_HANDLE lpScHandle
+//
+// https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-scmr/dc84adb3-d51d-48eb-820d-ba1c6ca5faf2
+type ROpenSCManagerWRequest struct {
+	LpMachineName   SvcCtlHandleW
+	LpDatabaseName  SvcCtlHandleW
+	DwDesiredAccess uint32
+}
+
+type ROpenSCManagerWResponse struct {
+}
 
 // Opnum 16
 type ROpenServiceWStruct struct{}
@@ -637,8 +676,8 @@ type ROpenSCManager2Struct struct{}
 
 // https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-scmr/dc84adb3-d51d-48eb-820d-ba1c6ca5faf2
 type OpenSCManagerRequest struct {
-	MachineName  PTR
-	DatabaseName PTR
+	MachineName  PointerHeader
+	DatabaseName PointerHeader
 	Reserved     uint16
 	AccessMask   uint32
 }
@@ -681,7 +720,7 @@ type CreateServiceRequest struct {
 	ContextHandle       []byte `smb:"fixed:20"`
 	ServiceName         SCRpcHandle
 	Reserved1           uint16
-	DisplayName         PTR
+	DisplayName         PointerHeader
 	Reserved2           uint16
 	AccessMask          uint32
 	ServiceType         uint32
