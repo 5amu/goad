@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/5amu/goad/pkg/dcerpc"
 	"github.com/5amu/goad/pkg/encoder"
 	"github.com/5amu/goad/pkg/smb/internal/erref"
 	"github.com/5amu/goad/pkg/smb/internal/smb2"
@@ -2136,15 +2137,16 @@ func (c *Session) GetNamedPipe(fname string) (*File, error) {
 	}
 	fs = fs.WithContext(c.ctx)
 
-	f, err := fs.OpenFile(msrpc.SVCCTL_DLL, os.O_RDWR, 0666)
+	iface := dcerpc.MSRPC_SCMR
+	syntax := dcerpc.MSRPC_NDR32
+
+	f, err := fs.OpenFile(iface.NamedPipe, os.O_RDWR, 0666)
 	if err != nil {
 		return nil, err
 	}
 
-	var callId uint32 = 0
-	rpcBind := msrpc.NewRpcBindRequestHeader(callId, msrpc.NTSVCS)
-	buf := make([]byte, rpcBind.Size())
-	rpcBind.Encode(buf)
+	bindS := dcerpc.NewBindStruct(syntax.UUID, syntax.Version, iface.UUID, iface.Version, iface.VersionMinor)
+	buf := bindS.Bytes()
 
 	writeReq := &smb2.WriteRequest{
 		FileId:           f.fd,
@@ -2172,14 +2174,14 @@ func (c *Session) GetNamedPipe(fname string) (*File, error) {
 	}
 
 	buf = make([]byte, 1048576)
-	l, err := f.Read(buf)
+	_, err = f.Read(buf)
 	if err != nil {
 		return nil, err
 	}
 
-	r1 := msrpc.BindAckDecoder(buf[:l])
-	if r1.IsInvalid() || r1.CallId() != callId {
-		return nil, &os.PathError{Op: "createService", Path: f.name, Err: &InvalidResponseError{"broken bind ack response format"}}
+	_, err = dcerpc.ParseBindResponse(buf)
+	if err != nil {
+		return nil, err
 	}
 	return f, nil
 }
