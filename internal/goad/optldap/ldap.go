@@ -297,6 +297,8 @@ func (o *Options) parseR(args []string) ExecutionFunction {
 			o.attributes = append(o.attributes, Description)
 		case strings.ToLower(ManagedPassword):
 			o.attributes = append(o.attributes, ManagedPassword)
+		case strings.ToLower(WhenCreated):
+			o.attributes = append(o.attributes, WhenCreated)
 		case "":
 			o.attributes = []string{SAMAccountName, Description}
 		default:

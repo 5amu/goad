@@ -1,5 +1,12 @@
 package dcerpc
 
+import (
+	"bytes"
+	"io"
+
+	"github.com/5amu/goad/pkg/encoder"
+)
+
 // https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-scmr/e7a38186-cde2-40ad-90c7-650822bd6333
 var MSRPC_SCMR MsrpcUUID = MsrpcUUID{
 	UUID:         "367abb81-9844-35f1-ad32-98f038001003",
@@ -365,7 +372,7 @@ type RControlServiceRequest struct {
 }
 
 type RControlServiceResponse struct {
-	Status LpServiceStatus
+	LpServiceStatus LpServiceStatus
 }
 
 // Opnum 2
@@ -373,7 +380,7 @@ type RControlServiceResponse struct {
 //	[in] SC_RPC_HANDLE hService
 //
 // https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-scmr/6744cdb8-f162-4be0-bb31-98996b6495be
-type RDeleteServiceStruct struct {
+type RDeleteServiceRequest struct {
 	HSCObject ScRpcHandle
 }
 
@@ -383,8 +390,12 @@ type RDeleteServiceStruct struct {
 //	[out] LPSC_RPC_LOCK lpLock
 //
 // https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-scmr/ff71f732-e91d-4189-8fb9-a410674c63ad
-type RLockServiceDatabaseStruct struct {
+type RLockServiceDatabaseRequest struct {
 	HSCManager ScRpcHandle
+}
+
+type RLockServiceDatabaseResponse struct {
+	LpLock []byte // RPC context handle
 }
 
 // Opnum 4
@@ -565,6 +576,35 @@ type ROpenSCManagerWRequest struct {
 }
 
 type ROpenSCManagerWResponse struct {
+	LpScHandle SvcCtlHandleW
+}
+
+func (c *Client) OpenSCManagerW(maName string, dbName string, dAccess uint32) (res ROpenSCManagerWResponse, err error) {
+	req, err := encoder.Marshal(ROpenSCManagerWRequest{
+		LpMachineName:   SvcCtlHandleW(NewWcharTPtr(encoder.StringToUnicode(maName), c.X64Syntax)),
+		LpDatabaseName:  SvcCtlHandleW(NewWcharTPtr(encoder.StringToUnicode(dbName), c.X64Syntax)),
+		DwDesiredAccess: SC_MANAGER_CREATE_SERVICE | SC_MANAGER_CONNECT,
+	})
+	if err != nil {
+		return res, err
+	}
+
+	_, err = c.Transport.Write(req)
+	if err != nil {
+		return res, err
+	}
+
+	var buf bytes.Buffer
+	l, err := io.Copy(&buf, c.Transport)
+	if err != nil {
+		return res, err
+	}
+
+	r, err := ParseResponse(buf.Bytes()[:l])
+	if err != nil {
+		return res, err
+	}
+	return res, encoder.Unmarshal(r.Stub, &res)
 }
 
 // Opnum 16

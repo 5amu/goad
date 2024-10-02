@@ -21,7 +21,7 @@ type WcharTPtr struct {
 	UnicodeString []byte
 }
 
-func NewWcharTPtr(str []byte) WcharTPtr {
+func NewWcharTPtr32(str []byte) WcharTPtr {
 	return WcharTPtr{
 		PointerHeader: PointerHeader{
 			ReferentId:  rand.Uint32(),
@@ -43,4 +43,11 @@ func NewWcharTPtr64(str []byte) WcharTPtr {
 		},
 		UnicodeString: AlignBytes64(str),
 	}
+}
+
+func NewWcharTPtr(str []byte, x64 bool) WcharTPtr {
+	if x64 {
+		return NewWcharTPtr64(str)
+	}
+	return NewWcharTPtr32(str)
 }

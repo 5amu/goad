@@ -2,6 +2,7 @@ package dcerpc
 
 import (
 	"encoding/binary"
+	"fmt"
 	"math/rand"
 
 	"github.com/5amu/goad/pkg/encoder"
@@ -34,15 +35,15 @@ const (
 // PDU PacketFlags
 // https://pubs.opengroup.org/onlinepubs/9629399/chap12.htm
 const (
-	FirstFrag          = 0x01
-	LastFrag           = 0x02
-	PDUFlagPending     = 0x03
-	CancelPending      = 0x04
-	PDUFlagNoFack      = 0x08
-	PDUFlagMayBe       = 0x10
-	PDUFlagIdemPotent  = 0x20
-	PDUFlagBroadcast   = 0x40
-	PDUFlagReserved_80 = 0x80
+	FirstFrag         = 0x01
+	LastFrag          = 0x02
+	PDUFlagPending    = 0x03
+	CancelPending     = 0x04
+	PDUFlagNoFack     = 0x08
+	PDUFlagMayBe      = 0x10
+	PDUFlagIdemPotent = 0x20
+	PDUFlagBroadcast  = 0x40
+	PDUFlagReserved80 = 0x80
 )
 
 // Supported version is 5.0
@@ -93,4 +94,39 @@ func (req *RequestStruct) Bytes() []byte {
 	// Set AllocHint to the size of the RPC body (the header is 24 bytes)
 	binary.LittleEndian.PutUint32(b[24:28], uint32(sz)-24)
 	return b
+}
+
+type ResponseStruct struct {
+	HeaderStruct
+	AllocHint   uint32 // len of stub
+	ContextID   uint16
+	CancelCount uint8
+	Reserved    uint8
+	Stub        []byte
+	ReturnCode  uint32
+}
+
+func ParseResponse(b []byte) (rs ResponseStruct, err error) {
+	if len(b) < 24 {
+		return rs, fmt.Errorf("response is too short (<24 bytes)")
+	}
+
+	var header HeaderStruct
+	if err = encoder.Unmarshal(b[0:24], &header); err != nil {
+		return rs, err
+	}
+
+	rs.HeaderStruct = header
+	binary.LittleEndian.PutUint32(b[24:28], rs.AllocHint)
+
+	l := 32 + int(rs.AllocHint) + 4
+	if len(b) != l {
+		return rs, fmt.Errorf("response is too short (<%d bytes)", l)
+	}
+
+	binary.LittleEndian.PutUint16(b[28:30], rs.ContextID)
+	rs.CancelCount = b[30]
+	rs.Stub = b[32 : 32+rs.AllocHint]
+	binary.LittleEndian.PutUint32(b[32+rs.AllocHint:], rs.ReturnCode)
+	return rs, nil
 }

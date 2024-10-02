@@ -80,6 +80,7 @@ const (
 	ManagedPassword            = "msDS-ManagedPassword"
 	UnicodePassword            = "unicodePwd"
 	DnsHostname                = "dnsHostName"
+	WhenCreated                = "whenCreated"
 )
 
 func JoinFilters(filters ...string) string {

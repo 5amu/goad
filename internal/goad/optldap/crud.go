@@ -37,7 +37,7 @@ func (o *Options) read(target string) {
 		var data []string
 		for _, a := range o.attributes {
 			switch a {
-			case LastLogon, PasswordLastSet:
+			case LastLogon, PasswordLastSet, WhenCreated:
 				data = append(data, DecodeADTimestamp(UnpackToString(m[a])))
 			case ObjectSid:
 				data = append(data, DecodeSID(UnpackToString(m[a])))
