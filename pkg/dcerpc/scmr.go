@@ -1,12 +1,5 @@
 package dcerpc
 
-import (
-	"bytes"
-	"io"
-
-	"github.com/5amu/goad/pkg/encoder"
-)
-
 // https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-scmr/e7a38186-cde2-40ad-90c7-650822bd6333
 var MSRPC_SCMR MsrpcUUID = MsrpcUUID{
 	UUID:         "367abb81-9844-35f1-ad32-98f038001003",
@@ -306,6 +299,9 @@ type ScRpcHandle struct {
 }
 type LpScRpcHandle ScRpcHandle
 
+// Define CharPtr as a pointer to a byte slice
+type CharPtr *byte
+
 // https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-dtyp/7d4dac05-9cef-4563-a058-f108abecce1d
 type SecurityDescriptor struct {
 	Revision    uint8
@@ -407,11 +403,14 @@ type RLockServiceDatabaseResponse struct {
 //	[out] LPBOUNDED_DWORD_256K pcbBytesNeeded
 //
 // https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-scmr/7f339950-ce73-4782-9e10-4e1c5924594e
-type RQueryServiceObjectSecurityStruct struct {
+type RQueryServiceObjectSecurityRequest struct {
 	HService              ScRpcHandle
 	DWSecurityInformation uint32
-	LPSecurityDescriptor  LpSecurityDescriptor
 	CBBufSize             uint32
+}
+
+type RQueryServiceObjectSecurityResponse struct {
+	LPSecurityDescriptor LpSecurityDescriptor
 }
 
 // Opnum 5
@@ -422,12 +421,14 @@ type RQueryServiceObjectSecurityStruct struct {
 //	[in] DWORD cbBufSize
 //
 // https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-scmr/ea93548f-3917-4626-bef7-2f3f8fa39299
-type RSetServiceObjectSecurityStruct struct {
+type RSetServiceObjectSecurityRequest struct {
 	HService              ScRpcHandle
 	DWSecurityInformation uint32
 	LPSecurityDescriptor  LpSecurityDescriptor
 	CBBufSize             uint32
 }
+
+type RSetServiceObjectSecurityResponse struct{}
 
 // Opnum 6
 //
@@ -435,8 +436,12 @@ type RSetServiceObjectSecurityStruct struct {
 //	[out] LPSERVICE_STATUS lpServiceStatus
 //
 // https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-scmr/cf94d915-b4e1-40e5-872b-a9cb3ad09b46
-type RQueryServiceStatusStruct struct {
+type RQueryServiceStatusRequest struct {
 	HService ScRpcHandle
+}
+
+type RQueryServiceStatusResponse struct {
+	LpServiceStatus LpServiceStatus
 }
 
 // Opnum 7
@@ -445,19 +450,23 @@ type RQueryServiceStatusStruct struct {
 //	[in] LPSERVICE_STATUS lpServiceStatus
 //
 // https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-scmr/df67cf3b-1bae-4359-b684-1b481d27a30c
-type RSetServiceStatusStruct struct {
+type RSetServiceStatusRequest struct {
 	HServiceStatus  ScRpcHandle
 	LPServiceStatus LpServiceStatus
 }
+
+type RSetServiceStatusResponse struct{}
 
 // Opnum 8
 //
 //	[in, out] LPSC_RPC_LOCK Lock
 //
 // https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-scmr/3456de79-5250-4982-8a30-debd2ea0df92
-type RUnlockServiceDatabaseStruct struct {
+type RUnlockServiceDatabaseRequest struct {
 	Lock LpScRpcHandle
 }
+
+type RUnlockServiceDatabaseResponse struct{}
 
 // Opnum 9
 //
@@ -465,10 +474,12 @@ type RUnlockServiceDatabaseStruct struct {
 //	[in] DWORD BootAcceptable
 //
 // https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-scmr/624e57ef-772d-45d2-ab99-03455879a424
-type RNotifyBootConfigStatusStruct struct {
+type RNotifyBootConfigStatusRequest struct {
 	LPMachineName  SvcCtlHandleW
 	BootAcceptable uint32
 }
+
+type RNotifyBootConfigStatusResponse struct{}
 
 // Opnum 11
 //
@@ -487,7 +498,7 @@ type RNotifyBootConfigStatusStruct struct {
 //	[in, string, unique, range(0, SC_MAX_NAME_LENGTH)] wchar_t* lpDisplayName
 //
 // https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-scmr/61ea7ed0-c49d-4152-a164-b4830f16c8a4
-type RChangeServiceConfigWStruct struct {
+type RChangeServiceConfigWRequest struct {
 	HService           ScRpcHandle
 	DWServiceType      uint32
 	DWStartType        uint32
@@ -502,6 +513,8 @@ type RChangeServiceConfigWStruct struct {
 	DWPWSize           uint32
 	LPDisplayName      WcharTPtr
 }
+
+type RChangeServiceConfigWResponse struct{}
 
 // Opnum 12
 //
@@ -523,7 +536,7 @@ type RChangeServiceConfigWStruct struct {
 //	[out] LPSC_RPC_HANDLE lpServiceHandle
 //
 // https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-scmr/6a8ca926-9477-4dd4-b766-692fab07227e
-type RCreateServiceWStruct struct {
+type RCreateServiceWRequest struct {
 	HSCManager         ScRpcHandle
 	LPServiceName      WcharTPtr
 	LPDisplayName      WcharTPtr
@@ -541,6 +554,10 @@ type RCreateServiceWStruct struct {
 	DWPWSize           uint32
 }
 
+type RCreateServiceWResponse struct {
+	LpServiceHandle ScRpcHandle
+}
+
 // Opnum 13
 //
 //	[in] SC_RPC_HANDLE hService,
@@ -551,166 +568,466 @@ type RCreateServiceWStruct struct {
 //	[out] LPBOUNDED_DWORD_256K lpServicesReturned
 //
 // https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-scmr/6269bea8-9dd3-4092-bd33-67cec685d38e
-type REnumDependentServicesWStruct struct {
+type REnumDependentServicesWRequest struct {
 	HService       ScRpcHandle
 	DWServiceState uint32
+	CBBufSize      uint32
+}
+
+type REnumDependentServicesWResponse struct {
+	LpServices         []byte
+	PCBBytesNeeded     uint32
+	LPServicesReturned uint32
 }
 
 // Opnum 14
-type REnumServicesStatusWStruct struct{}
-
-// Opnum 15
 //
-//	[in, string, unique, range(0, SC_MAX_COMPUTER_NAME_LENGTH)]
-//	SVCCTL_HANDLEW lpMachineName,
-//	[in, string, unique, range(0, SC_MAX_NAME_LENGTH)]
-//	wchar_t* lpDatabaseName,
-//	[in] DWORD dwDesiredAccess,
-//	[out] LPSC_RPC_HANDLE lpScHandle
+// [in] SC_RPC_HANDLE hSCManager,
+// [in] DWORD dwServiceType,
+// [in] DWORD dwServiceState,
+// [out, size_is(cbBufSize)] LPBYTE lpBuffer,
+// [in, range(0, 1024*256)] DWORD cbBufSize,
+// [out] LPBOUNDED_DWORD_256K pcbBytesNeeded,
+// [out] LPBOUNDED_DWORD_256K lpServicesReturned
 //
-// https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-scmr/dc84adb3-d51d-48eb-820d-ba1c6ca5faf2
-type ROpenSCManagerWRequest struct {
-	LpMachineName   SvcCtlHandleW
-	LpDatabaseName  SvcCtlHandleW
-	DwDesiredAccess uint32
+// https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-scmr/d5e8a033-8d44-4bc3-a5e5-ac8480d3a942
+type REnumServicesStatusWRequest struct {
+	HSCManager     ScRpcHandle
+	DWServiceType  uint32
+	DWServiceState uint32
+	CBBufSize      uint32
 }
 
-type ROpenSCManagerWResponse struct {
-	LpScHandle SvcCtlHandleW
-}
-
-func (c *Client) OpenSCManagerW(maName string, dbName string, dAccess uint32) (res ROpenSCManagerWResponse, err error) {
-	req, err := encoder.Marshal(ROpenSCManagerWRequest{
-		LpMachineName:   SvcCtlHandleW(NewWcharTPtr(encoder.StringToUnicode(maName), c.X64Syntax)),
-		LpDatabaseName:  SvcCtlHandleW(NewWcharTPtr(encoder.StringToUnicode(dbName), c.X64Syntax)),
-		DwDesiredAccess: SC_MANAGER_CREATE_SERVICE | SC_MANAGER_CONNECT,
-	})
-	if err != nil {
-		return res, err
-	}
-
-	_, err = c.Transport.Write(req)
-	if err != nil {
-		return res, err
-	}
-
-	var buf bytes.Buffer
-	l, err := io.Copy(&buf, c.Transport)
-	if err != nil {
-		return res, err
-	}
-
-	r, err := ParseResponse(buf.Bytes()[:l])
-	if err != nil {
-		return res, err
-	}
-	return res, encoder.Unmarshal(r.Stub, &res)
+type REnumServicesStatusWResponse struct {
+	LPBuffer           []byte
+	PCBBytesNeeded     uint32
+	LPServicesReturned uint32
 }
 
 // Opnum 16
-type ROpenServiceWStruct struct{}
+type ROpenServiceWRequest struct {
+	HSCManager      ScRpcHandle
+	LPServiceName   WcharTPtr
+	DWDesiredAccess uint32
+}
+
+type ROpenServiceWResponse struct {
+	LpServiceHandle ScRpcHandle
+}
 
 // Opnum 17
-type RQueryServiceConfigWStruct struct{}
+type RQueryServiceConfigWRequest struct {
+	HService ScRpcHandle
+}
+
+type RQueryServiceConfigWResponse struct {
+	// Add fields as per the documentation
+}
 
 // Opnum 18
-type RQueryServiceLockStatusWStruct struct{}
+type RQueryServiceLockStatusWRequest struct {
+	HSCManager ScRpcHandle
+}
+
+type RQueryServiceLockStatusWResponse struct {
+	// Add fields as per the documentation
+}
 
 // Opnum 19
-type RStartServiceWStruct struct{}
+type RStartServiceWRequest struct {
+	HService ScRpcHandle
+	Argc     uint32
+	Argv     []WcharTPtr
+}
+
+type RStartServiceWResponse struct {
+	// Add fields as per the documentation
+}
 
 // Opnum 20
-type RGetServiceDisplayNameWStruct struct{}
+type RGetServiceDisplayNameWRequest struct {
+	HSCManager    ScRpcHandle
+	LPServiceName WcharTPtr
+}
+
+type RGetServiceDisplayNameWResponse struct {
+	LPDisplayName WcharTPtr
+}
 
 // Opnum 21
-type RGetServiceKeyNameWStruct struct{}
+type RGetServiceKeyNameWRequest struct {
+	HSCManager    ScRpcHandle
+	LPDisplayName WcharTPtr
+}
+
+type RGetServiceKeyNameWResponse struct {
+	LPServiceName WcharTPtr
+}
 
 // Opnum 23
-type RChangeServiceConfigAStruct struct{}
+type RChangeServiceConfigARequest struct {
+	HService           ScRpcHandle
+	DWServiceType      uint32
+	DWStartType        uint32
+	DWErrorControl     uint32
+	LPBinaryPathName   CharPtr
+	LPLoadOrderGroup   CharPtr
+	LPDWTagId          CharPtr
+	LPDependencies     CharPtr
+	DWDependSize       uint32
+	LPServiceStartName CharPtr
+	LPPassword         CharPtr
+	DWPWSize           uint32
+	LPDisplayName      CharPtr
+}
+
+type RChangeServiceConfigAResponse struct{}
 
 // Opnum 24
-type RCreateServiceAStruct struct{}
+type RCreateServiceARequest struct {
+	HSCManager         ScRpcHandle
+	LPServiceName      CharPtr
+	LPDisplayName      CharPtr
+	DWDesiredAccess    uint32
+	DWServiceType      uint32
+	DWStartType        uint32
+	DWErrorControl     uint32
+	LPBinaryPathName   CharPtr
+	LPLoadOrderGroup   CharPtr
+	LPDWTagId          CharPtr
+	LPDependencies     CharPtr
+	DWDependSize       uint32
+	LPServiceStartName CharPtr
+	LPPassword         CharPtr
+	DWPWSize           uint32
+}
+
+type RCreateServiceAResponse struct {
+	LpServiceHandle ScRpcHandle
+}
 
 // Opnum 25
-type REnumDependentServicesAStruct struct{}
+type REnumDependentServicesARequest struct {
+	HService       ScRpcHandle
+	DWServiceState uint32
+	CBBufSize      uint32
+}
+
+type REnumDependentServicesAResponse struct {
+	LpServices         []byte
+	PCBBytesNeeded     uint32
+	LPServicesReturned uint32
+}
 
 // Opnum 26
-type REnumServicesStatusAStruct struct{}
+type REnumServicesStatusARequest struct {
+	HSCManager     ScRpcHandle
+	DWServiceType  uint32
+	DWServiceState uint32
+	CBBufSize      uint32
+}
+
+type REnumServicesStatusAResponse struct {
+	LPBuffer           []byte
+	PCBBytesNeeded     uint32
+	LPServicesReturned uint32
+}
 
 // Opnum 27
-type ROpenSCManagerAStruct struct{}
+type ROpenSCManagerARequest struct {
+	LpMachineName   CharPtr
+	LpDatabaseName  CharPtr
+	DwDesiredAccess uint32
+}
+
+type ROpenSCManagerAResponse struct {
+	LpScHandle ScRpcHandle
+}
 
 // Opnum 28
-type ROpenServiceAStruct struct{}
+type ROpenServiceARequest struct {
+	HSCManager      ScRpcHandle
+	LPServiceName   CharPtr
+	DWDesiredAccess uint32
+}
+
+type ROpenServiceAResponse struct {
+	LpServiceHandle ScRpcHandle
+}
 
 // Opnum 29
-type RQueryServiceConfigAStruct struct{}
+type RQueryServiceConfigARequest struct {
+	HService ScRpcHandle
+}
+
+type RQueryServiceConfigAResponse struct {
+	// Add fields as per the documentation
+}
 
 // Opnum 30
-type RQueryServiceLockStatusAStruct struct{}
+type RQueryServiceLockStatusARequest struct {
+	HSCManager ScRpcHandle
+}
+
+type RQueryServiceLockStatusAResponse struct {
+	// Add fields as per the documentation
+}
 
 // Opnum 31
-type RStartServiceAStruct struct{}
+type RStartServiceARequest struct {
+	HService ScRpcHandle
+	Argc     uint32
+	Argv     []CharPtr
+}
+
+type RStartServiceAResponse struct {
+	// Add fields as per the documentation
+}
 
 // Opnum 32
-type RGetServiceDisplayNameAStruct struct{}
+type RGetServiceDisplayNameARequest struct {
+	HSCManager    ScRpcHandle
+	LPServiceName CharPtr
+}
+
+type RGetServiceDisplayNameAResponse struct {
+	LPDisplayName CharPtr
+}
 
 // Opnum 33
-type RGetServiceKeyNameAStruct struct{}
+type RGetServiceKeyNameARequest struct {
+	HSCManager    ScRpcHandle
+	LPDisplayName CharPtr
+}
+
+type RGetServiceKeyNameAResponse struct {
+	LPServiceName CharPtr
+}
 
 // Opnum 35
-type REnumServiceGroupWStruct struct{}
+type REnumServiceGroupWRequest struct {
+	HSCManager     ScRpcHandle
+	DWServiceType  uint32
+	DWServiceState uint32
+	CBBufSize      uint32
+}
+
+type REnumServiceGroupWResponse struct {
+	LPBuffer           []byte
+	PCBBytesNeeded     uint32
+	LPServicesReturned uint32
+}
 
 // Opnum 36
-type RChangeServiceConfig2AStruct struct{}
+type RChangeServiceConfig2ARequest struct {
+	HService    ScRpcHandle
+	DWInfoLevel uint32
+	LPInfo      CharPtr
+}
+
+type RChangeServiceConfig2AResponse struct{}
 
 // Opnum 37
-type RChangeServiceConfig2WStruct struct{}
+type RChangeServiceConfig2WRequest struct {
+	HService    ScRpcHandle
+	DWInfoLevel uint32
+	LPInfo      WcharTPtr
+}
+
+type RChangeServiceConfig2WResponse struct{}
 
 // Opnum 38
-type RQueryServiceConfig2AStruct struct{}
+type RQueryServiceConfig2ARequest struct {
+	HService    ScRpcHandle
+	DWInfoLevel uint32
+	CBBufSize   uint32
+}
+
+type RQueryServiceConfig2AResponse struct {
+	// Add fields as per the documentation
+}
 
 // Opnum 39
-type RQueryServiceConfig2WStruct struct{}
+type RQueryServiceConfig2WRequest struct {
+	HService    ScRpcHandle
+	DWInfoLevel uint32
+	CBBufSize   uint32
+}
+
+type RQueryServiceConfig2WResponse struct {
+	// Add fields as per the documentation
+}
 
 // Opnum 40
-type RQueryServiceStatusExStruct struct{}
+type RQueryServiceStatusExRequest struct {
+	HService  ScRpcHandle
+	InfoLevel uint32
+	CBBufSize uint32
+}
+
+type RQueryServiceStatusExResponse struct {
+	// Add fields as per the documentation
+}
 
 // Opnum 41
-type REnumServicesStatusExAStruct struct{}
+type REnumServicesStatusExARequest struct {
+	HSCManager     ScRpcHandle
+	InfoLevel      uint32
+	DWServiceType  uint32
+	DWServiceState uint32
+	CBBufSize      uint32
+}
+
+type REnumServicesStatusExAResponse struct {
+	LPBuffer           []byte
+	PCBBytesNeeded     uint32
+	LPServicesReturned uint32
+}
 
 // Opnum 42
-type REnumServicesStatusExWStruct struct{}
+type REnumServicesStatusExWRequest struct {
+	HSCManager     ScRpcHandle
+	InfoLevel      uint32
+	DWServiceType  uint32
+	DWServiceState uint32
+	CBBufSize      uint32
+}
+
+type REnumServicesStatusExWResponse struct {
+	LPBuffer           []byte
+	PCBBytesNeeded     uint32
+	LPServicesReturned uint32
+}
 
 // Opnum 44
-type RCreateServiceWOW64AStruct struct{}
+type RCreateServiceWOW64ARequest struct {
+	HSCManager         ScRpcHandle
+	LPServiceName      CharPtr
+	LPDisplayName      CharPtr
+	DWDesiredAccess    uint32
+	DWServiceType      uint32
+	DWStartType        uint32
+	DWErrorControl     uint32
+	LPBinaryPathName   CharPtr
+	LPLoadOrderGroup   CharPtr
+	LPDWTagId          CharPtr
+	LPDependencies     CharPtr
+	DWDependSize       uint32
+	LPServiceStartName CharPtr
+	LPPassword         CharPtr
+	DWPWSize           uint32
+}
+
+type RCreateServiceWOW64AResponse struct {
+	LpServiceHandle ScRpcHandle
+}
 
 // Opnum 45
-type RCreateServiceWOW64WStruct struct{}
+type RCreateServiceWOW64WRequest struct {
+	HSCManager         ScRpcHandle
+	LPServiceName      WcharTPtr
+	LPDisplayName      WcharTPtr
+	DWDesiredAccess    uint32
+	DWServiceType      uint32
+	DWStartType        uint32
+	DWErrorControl     uint32
+	LPBinaryPathName   WcharTPtr
+	LPLoadOrderGroup   WcharTPtr
+	LPDWTagId          WcharTPtr
+	LPDependencies     WcharTPtr
+	DWDependSize       uint32
+	LPServiceStartName WcharTPtr
+	LPPassword         WcharTPtr
+	DWPWSize           uint32
+}
+
+type RCreateServiceWOW64WResponse struct {
+	LpServiceHandle ScRpcHandle
+}
 
 // Opnum 47
-type RNotifyServiceStatusChangeStruct struct{}
+type RNotifyServiceStatusChangeRequest struct {
+	HService       ScRpcHandle
+	NotifyMask     uint32
+	NotifyCallback WcharTPtr
+}
+
+type RNotifyServiceStatusChangeResponse struct{}
 
 // Opnum 48
-type RGetNotifyResultsStruct struct{}
+type RGetNotifyResultsRequest struct {
+	HService       ScRpcHandle
+	NotifyMask     uint32
+	NotifyCallback WcharTPtr
+}
 
 // Opnum 49
-type RCloseNotifyHandleStruct struct{}
+type RCloseNotifyHandleRequest struct {
+	HService ScRpcHandle
+}
 
 // Opnum 50
-type RControlServiceExAStruct struct{}
+type RControlServiceExARequest struct {
+	HService      ScRpcHandle
+	DWControl     uint32
+	DWInfoLevel   uint32
+	LPControlInfo CharPtr
+}
 
 // Opnum 51
-type RControlServiceExWStruct struct{}
+type RControlServiceExWRequest struct {
+	HService      ScRpcHandle
+	DWControl     uint32
+	DWInfoLevel   uint32
+	LPControlInfo WcharTPtr
+}
+
+type RControlServiceExWResponse struct{}
 
 // Opnum 56
-type RQueryServiceConfigExStruct struct{}
+type RQueryServiceConfigExRequest struct {
+	HService  ScRpcHandle
+	InfoLevel uint32
+	CBBufSize uint32
+}
+
+type RQueryServiceConfigExResponse struct {
+	// Add fields as per the documentation
+}
 
 // Opnum 60
-type RCreateWowServiceStruct struct{}
+type RCreateWowServiceRequest struct {
+	HSCManager         ScRpcHandle
+	LPServiceName      WcharTPtr
+	LPDisplayName      WcharTPtr
+	DWDesiredAccess    uint32
+	DWServiceType      uint32
+	DWStartType        uint32
+	DWErrorControl     uint32
+	LPBinaryPathName   WcharTPtr
+	LPLoadOrderGroup   WcharTPtr
+	LPDWTagId          WcharTPtr
+	LPDependencies     WcharTPtr
+	DWDependSize       uint32
+	LPServiceStartName WcharTPtr
+	LPPassword         WcharTPtr
+	DWPWSize           uint32
+}
+
+type RCreateWowServiceResponse struct {
+	LpServiceHandle ScRpcHandle
+}
 
 // Opnum 64
-type ROpenSCManager2Struct struct{}
+type ROpenSCManager2Request struct {
+	LpMachineName   WcharTPtr
+	LpDatabaseName  WcharTPtr
+	DwDesiredAccess uint32
+}
+
+type ROpenSCManager2Response struct {
+	// Add fields as per the documentation
+}
 
 // ########################################################################################################
 
